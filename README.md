@@ -10,7 +10,7 @@ To link against the Lib:
 g++ -o test_app test_app.cpp -L. -lqpdebug -libverbs -lmlx5
 
 
-##rdma_profiler
+# rdma_profiler
 The RDMA profiler is an app that would profile the network for you, meaning it will take the following timestamps:
   1. post timestamp
   2. doorbell
