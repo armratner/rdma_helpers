@@ -1,0 +1,28 @@
+{
+    "hosts": [
+        {
+            "hostname": "host1",
+            "ip_address": "192.168.1.100",
+            "port": 18515,
+            "device_name": "mlx5_0"
+        },
+        {
+            "hostname": "host2",
+            "ip_address": "192.168.1.101",
+            "port": 18515,
+            "device_name": "mlx5_0"
+        }
+    ],
+    "qp_config": {
+        "num_qps": 4,
+        "sq_size": 1024,
+        "rq_size": 1024,
+        "max_inline_data": 64,
+        "max_send_wr": 1024,
+        "max_recv_wr": 1024
+    },
+    "buffer_size": 4096,
+    "use_event_channel": false,
+    "cq_size": 16,
+    "max_mr_size": 65536
+}
