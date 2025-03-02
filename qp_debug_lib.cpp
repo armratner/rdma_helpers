@@ -269,9 +269,10 @@ int queryAndPrintQpProperties(struct ibv_qp *qp)
  */
 extern "C" int debug_print_ibv_qp(struct ibv_qp *qp)
 {
-    if (!qp) {
-        std::cerr << "QP pointer is NULL.\n";
-        return -1;
-    }
+    if (!qp) return -1;
+    if (!qp->context) return -1;
+    // Print minimal QP info:
+    std::cerr << "[qp_debug] QP num: " << qp->qp_num
+              << ", state: " << qp->state << std::endl;
     return queryAndPrintQpProperties(qp);
 }
