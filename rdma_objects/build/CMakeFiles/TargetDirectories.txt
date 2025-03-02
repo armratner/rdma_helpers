@@ -1,0 +1,8 @@
+/mtxswgwork/armeng/workspace/armen_dev/EasyRdma/rdma_helpers/rdma_objects/build/CMakeFiles/rdma_objects.dir
+/mtxswgwork/armeng/workspace/armen_dev/EasyRdma/rdma_helpers/rdma_objects/build/CMakeFiles/rdma_objects_test.dir
+/mtxswgwork/armeng/workspace/armen_dev/EasyRdma/rdma_helpers/rdma_objects/build/CMakeFiles/edit_cache.dir
+/mtxswgwork/armeng/workspace/armen_dev/EasyRdma/rdma_helpers/rdma_objects/build/CMakeFiles/rebuild_cache.dir
+/mtxswgwork/armeng/workspace/armen_dev/EasyRdma/rdma_helpers/rdma_objects/build/CMakeFiles/list_install_components.dir
+/mtxswgwork/armeng/workspace/armen_dev/EasyRdma/rdma_helpers/rdma_objects/build/CMakeFiles/install.dir
+/mtxswgwork/armeng/workspace/armen_dev/EasyRdma/rdma_helpers/rdma_objects/build/CMakeFiles/install/local.dir
+/mtxswgwork/armeng/workspace/armen_dev/EasyRdma/rdma_helpers/rdma_objects/build/CMakeFiles/install/strip.dir
