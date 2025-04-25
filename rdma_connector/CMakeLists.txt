@@ -12,9 +12,14 @@ pkg_check_modules(IBVERBS REQUIRED libibverbs)
 pkg_check_modules(RDMACM REQUIRED librdmacm)
 pkg_check_modules(MLX5 REQUIRED libmlx5)
 
+# Path to rdma_objects library
+set(RDMA_OBJECTS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../rdma_objects/build)
+link_directories(${RDMA_OBJECTS_DIR})
+
 # Source files
 set(SOURCES
     connector.cpp
+    connection.cpp
 )
 
 # Include directories
@@ -33,6 +38,17 @@ add_library(rdma_connector STATIC ${SOURCES})
 # Link dependencies
 target_link_libraries(rdma_connector
     rdma_objects
+    ${IBVERBS_LIBRARIES}
+    ${RDMACM_LIBRARIES}
+    ${MLX5_LIBRARIES}
+)
+
+# Test executable
+add_executable(rdma_connector_test test.cpp)
+target_link_libraries(rdma_connector_test
+    rdma_connector
+    rdma_objects
+    pthread
     ${IBVERBS_LIBRARIES}
     ${RDMACM_LIBRARIES}
     ${MLX5_LIBRARIES}

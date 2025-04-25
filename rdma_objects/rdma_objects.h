@@ -167,11 +167,13 @@ public:
     STATUS initialize(cq_creation_params& params);
     struct ibv_cq* get() const;
     uint32_t get_cqn() const;
-    STATUS poll_cq();
+    STATUS poll_cq(); // Standard verbs event-based polling
 private:
     ibv_cq_ex* _pcq;
     uint32_t _cqn;
     mlx5dv_cq* _pdv_cq;
+    ibv_comp_channel* _comp_channel = nullptr;
+    uint32_t _consumer_index = 0;
 };
 
 //==============================================================================
@@ -268,6 +270,11 @@ public:
                              uint64_t raddr, uint32_t rkey, 
                              uint32_t length, uint32_t imm_data, 
                              uint32_t flags = 0);
+
+    // RDMA Write wrapper for test.cpp compatibility
+    STATUS post_write(void* laddr, uint32_t lkey, uint64_t raddr, uint32_t rkey, uint32_t length, uint32_t flags = 0) {
+        return post_rdma_write(laddr, lkey, raddr, rkey, length, flags);
+    }
 
     STATUS post_recv();
 private:

@@ -1,5 +1,6 @@
 #include "rdma_objects.h"
 #include <cstring>
+#include <poll.h>
 
 using namespace std;
 
@@ -555,7 +556,6 @@ memory_region::initialize(
 ) {
 
     mlx5dv_devx_umem_in umem_in;
-    STATUS res = STATUS_OK;
     void *aligned_address;
 
     if (_cross_mr) {
@@ -726,52 +726,72 @@ completion_queue::initialize(cq_creation_params& params) {
     if (_pcq) {
         return STATUS_OK;
     }
+    _consumer_index = 0;
+    // Create completion channel
+    _comp_channel = ibv_create_comp_channel(params.context);
+    if (!_comp_channel) {
+        log_error("Failed to create completion channel");
+        return STATUS_ERR;
+    }
+    // Assign channel to CQ attributes
+    params.cq_attr_ex->channel = _comp_channel;
     _pcq = mlx5dv_create_cq(params.context, params.cq_attr_ex , params.dv_cq_attr);
     if (!_pcq) {
         log_error("Failed to create completion queue, error: %s", strerror(errno));
+        ibv_destroy_comp_channel(_comp_channel);
+        _comp_channel = nullptr;
         return STATUS_ERR;
     }
-
     _pdv_cq = aligned_alloc<mlx5dv_cq>(sizeof(mlx5dv_cq));
     if (!_pdv_cq) {
         log_error("Failed to allocate memory for mlx5dv_cq");
+        ibv_destroy_cq(ibv_cq_ex_to_cq(_pcq));
+        ibv_destroy_comp_channel(_comp_channel);
+        _comp_channel = nullptr;
         return STATUS_ERR;
     }
-
     struct mlx5dv_obj dv_obj = {};
     dv_obj.cq.in  = ibv_cq_ex_to_cq(_pcq);
     dv_obj.cq.out = _pdv_cq;
     if (mlx5dv_init_obj(&dv_obj, MLX5DV_OBJ_CQ)) {
         log_error("Failed to initialize mlx5dv_cq");
         ibv_destroy_cq(ibv_cq_ex_to_cq(_pcq));
+        ibv_destroy_comp_channel(_comp_channel);
+        _comp_channel = nullptr;
         return STATUS_ERR;
     }
-
     _cqn = _pdv_cq->cqn;
     log_debug("Created completion queue with cqn: %d", _cqn);
 
     return STATUS_OK;
 }
 
-struct ibv_cq*
-completion_queue::get() const {
-    return ibv_cq_ex_to_cq(_pcq);
+STATUS completion_queue::poll_cq() {
+    if (!_pdv_cq) return STATUS_ERR;
+    volatile struct mlx5_cqe64* cqe_buf = (volatile struct mlx5_cqe64*)_pdv_cq->buf;
+    int cqe_cnt = _pdv_cq->cqe_cnt;
+    int ci = _consumer_index % cqe_cnt;
+    volatile struct mlx5_cqe64* cqe = &cqe_buf[ci];
+    uint8_t owner = cqe->op_own & 0x1;
+    uint8_t expected_owner = (_consumer_index / cqe_cnt) & 0x1;
+    uint8_t opcode = cqe->op_own >> 4;
+    log_debug("[CQ poll] ci=%d owner=%u expected_owner=%u opcode=0x%x wqe_counter=%u byte_cnt=%u", ci, owner, expected_owner, opcode, cqe->wqe_counter, cqe->byte_cnt);
+    if (owner == expected_owner && opcode != 0xf) {
+        log_info("DEVX CQE received: opcode=%u, wqe_counter=%u, byte_cnt=%u", opcode, cqe->wqe_counter, cqe->byte_cnt);
+        _consumer_index++;
+        *(_pdv_cq->dbrec) = htobe32(_consumer_index & 0xffffff);
+        __sync_synchronize();
+        return STATUS_OK;
+    }
+    return STATUS_ERR;
 }
 
-uint32_t
-completion_queue::get_cqn() const {
+uint32_t completion_queue::get_cqn() const {
     return _cqn;
 }
 
-STATUS
-completion_queue::poll_cq() {
-    if (!_pcq) return STATUS_ERR;
-    
-    ibv_wc wc{};
-    int ret = ibv_poll_cq(ibv_cq_ex_to_cq(_pcq), 1, &wc);
-    if (ret < 0) return STATUS_ERR;
-    if (ret == 0) return STATUS_NO_DATA;
-    return STATUS_OK;
+struct ibv_cq* completion_queue::get() const {
+    return ibv_cq_ex_to_cq(_pcq);
 }
 
 //============================================================================
@@ -1045,43 +1065,32 @@ STATUS queue_pair::post_send(struct mlx5_wqe_ctrl_seg* ctrl, unsigned wqe_size) 
     // Calculate the number of basic blocks (BB) this WQE will consume
     uint16_t num_bb = (wqe_size + MLX5_SEND_WQE_BB - 1) / MLX5_SEND_WQE_BB;
     
-    // Current send queue position
-    uint16_t sw_pi = _sq_pi;
-    
     // Ensure we have enough space in the queue
-    uint16_t available = _sq_size - (_sq_pi - _sq_ci);
+    uint16_t available = _sq_size - ((_sq_pi - _sq_ci) % _sq_size);
     if (available < num_bb) {
         log_error("Send queue full, not enough space for WQE");
         return STATUS_ERR;
     }
     
     // Calculate the DB value: new producer index after posting this WQE
-    uint16_t new_pi = sw_pi + num_bb;
+    uint16_t new_pi = (_sq_pi + num_bb) % _sq_size;
     
     // Ensure all WQE stores are visible before writing doorbell record
     __sync_synchronize(); // Full memory barrier
     
-    // Write doorbell record - this is where HW reads the current queue position
-    volatile uint32_t* dbrec = (volatile uint32_t*)(_umem_db->addr() + _sq_dbr_offset);
-    *dbrec = htobe32(new_pi & 0xFFFF);
-    
-    // Ensure doorbell record is written before ringing the doorbell
-    __atomic_thread_fence(__ATOMIC_SEQ_CST);
-    
-    // Get pointers to BlueFlame register and control segment
+    // Write control+data to the BlueFlame register using 64-bit writes
     void* bf_reg = _uar->get()->reg_addr;
     void* src = ctrl;
-    
-    // Write control+data to the BlueFlame register using 64-bit writes
     __be64* dst64 = (__be64*)bf_reg;
     __be64* src64 = (__be64*)src;
-    
-    // Copy the WQE data to the BlueFlame register
-    for (int i = 0; i < (num_bb * MLX5_SEND_WQE_BB / sizeof(__be64)); ++i) {
+    for (size_t i = 0; i < (num_bb * MLX5_SEND_WQE_BB / sizeof(__be64)); ++i) {
         dst64[i] = src64[i];
     }
+    __atomic_thread_fence(__ATOMIC_SEQ_CST);
     
-    // Ensure WQE is fully written to BlueFlame register
+    // Write doorbell record - this is where HW reads the current queue position
+    volatile uint32_t* dbrec = (volatile uint32_t*)((char*)_umem_db->addr() + _sq_dbr_offset);
+    *dbrec = htobe32(new_pi & 0xFFFF);
     __atomic_thread_fence(__ATOMIC_SEQ_CST);
     
     // Update the queue pointer
@@ -1112,7 +1121,7 @@ STATUS queue_pair::post_wqe(uint8_t opcode, void* laddr, uint32_t lkey,
     wqe_size = (wqe_size + RDMA_WQE_SEG_SIZE - 1) & ~(RDMA_WQE_SEG_SIZE - 1);
     
     // Get pointer to the WQE in the send queue
-    mlx5_wqe_ctrl_seg* ctrl = (mlx5_wqe_ctrl_seg*)(_umem_sq->addr() + (_sq_pi % _sq_size) * RDMA_WQE_SEG_SIZE);
+    mlx5_wqe_ctrl_seg* ctrl = (mlx5_wqe_ctrl_seg*)((char*)_umem_sq->addr() + (_sq_pi % _sq_size) * RDMA_WQE_SEG_SIZE);
     
     // Set up control segment
     memset(ctrl, 0, wqe_size);
@@ -1183,5 +1192,13 @@ STATUS queue_pair::post_recv() {
     // This would follow a similar pattern but use the receive queue
     log_error("post_recv not yet implemented");
     return STATUS_NOT_IMPLEMENTED;
+}
+
+// Implementation for queue_pair::get()
+struct ibv_qp* queue_pair::get() const {
+    // If you have a direct ibv_qp* member, return it. If not, return nullptr or the correct pointer.
+    // If using DEVX, you may need to cast or extract the ibv_qp* from your internal structure.
+    // For now, return nullptr if not available.
+    return nullptr; // TODO: return actual ibv_qp* if available
 }
 

@@ -66,17 +66,23 @@ int main ()
         return res;
     }
 
-    qp_init_creation_params qp_params = {
-        .rdevice = rdevice.get(),
-        .context = rdevice->get_context(),
-        .pdn = pd->get_pdn(),
-        .cqn = cq->get_cqn(),
-        .uar_obj = uar,
-        .umem_sq = umem_sq,
-        .umem_db = umem_db,
-        .sq_size = 2,
-        .rq_size = 2
-    };
+    qp_init_creation_params qp_params = {};
+    qp_params.rdevice = rdevice.get();
+    qp_params.context = rdevice->get_context();
+    qp_params.pdn = pd->get_pdn();
+    qp_params.cqn = cq->get_cqn();
+    qp_params.uar_obj = uar;
+    qp_params.umem_sq = umem_sq;
+    qp_params.umem_db = umem_db;
+    qp_params.sq_size = 2;
+    qp_params.rq_size = 2;
+    qp_params.max_send_wr = 0;
+    qp_params.max_recv_wr = 0;
+    qp_params.max_send_sge = 0;
+    qp_params.max_recv_sge = 0;
+    qp_params.max_inline_data = 0;
+    qp_params.max_rd_atomic = 0;
+    qp_params.max_dest_rd_atomic = 0;
 
     auto_ref<queue_pair> p_qp;
     res = p_qp->initialize(qp_params);
@@ -208,7 +214,15 @@ int main ()
     }
     
     log_debug("RDMA write request posted successfully");
-    
+
+    // Use event-driven CQ polling (standard verbs)
+    res = cq->poll_cq();
+    if (FAILED(res)) {
+        log_error("CQ polling failed");
+        free(addr);
+        return res;
+    }
+
     free(addr);
     return STATUS_OK;
 }

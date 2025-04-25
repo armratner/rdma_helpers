@@ -42,6 +42,8 @@ inline bool FAILED(STATUS status) {
         } \
     } while (0)
 
+// Mark unused static functions as unused to silence warnings
+static uint32_t ilog2(uint32_t x) __attribute__((unused));
 static uint32_t ilog2(uint32_t x) {
     uint32_t r = 0;
     while ((1U << r) < x) { ++r; }
@@ -121,7 +123,6 @@ inline void log_error(const char* format, ...) {
     va_end(args);
 }
 
-// Corrected log_debug
 inline void log_debug(const char* format, ...) {
     if (g_log_level >= LOG_LEVEL_DEBUG) {
         va_list args;
@@ -133,7 +134,6 @@ inline void log_debug(const char* format, ...) {
     }
 }
 
-// Corrected log_info
 inline void log_info(const char* format, ...) {
     if (g_log_level >= LOG_LEVEL_INFO) {
         va_list args;
@@ -221,11 +221,13 @@ static unsigned __tlx_ilog2_u64(uint64_t n)
 #endif
 }
 
+static unsigned tlx_ffs32(uint32_t n) __attribute__((unused));
 static unsigned tlx_ffs32(uint32_t n)
 {
     return __tlx_ilog2_u32(n & -n);
 }
 
+static unsigned tlx_ffs64(uint64_t n) __attribute__((unused));
 static unsigned tlx_ffs64(uint64_t n)
 {
     return __tlx_ilog2_u64(n & -n);
