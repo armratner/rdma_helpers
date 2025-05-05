@@ -1587,8 +1587,12 @@ enum {
 };
 
 enum {
-	MLX5_MKC_ACCESS_MODE_MTT = 0x1,
-	MLX5_MKC_ACCESS_MODE_KLMS = 0x2,
+	MLX5_MKC_ACCESS_MODE_PA            = 0x0,
+	MLX5_MKC_ACCESS_MODE_MTT           = 0x1,
+	MLX5_MKC_ACCESS_MODE_KLMS          = 0x2,
+	MLX5_MKC_ACCESS_MODE_KSM           = 0x3,
+	MLX5_MKC_ACCESS_MODE_MEMIC         = 0x5,
+	MLX5_MKC_ACCESS_MODE_CROSSING_VHCA = 0x6
 };
 
 struct mlx5_ifc_mkc_bits {
@@ -3625,7 +3629,7 @@ struct mlx5_ifc_qpc_bits {
 	u8         isolate_vl_tc[0x1];
 	u8         pm_state[0x2];
 	u8         reserved_at_15[0x1];
-	u8	   req_e2e_credit_mode[0x2];
+	u8         req_e2e_credit_mode[0x2];
 	u8         offload_type[0x4];
 	u8         end_padding_mode[0x2];
 	u8         reserved_at_1e[0x2];
@@ -3820,7 +3824,7 @@ struct mlx5_ifc_create_qp_in_bits {
 
 	struct mlx5_ifc_qpc_bits qpc;
 
-	u8         reserved_at_800[0x40];
+	u8         e_mtt_pointer_or_wq_umem_offset[0x40];
 
 	u8         wq_umem_id[0x20];
 
@@ -5227,15 +5231,6 @@ struct mlx5_ifc_delete_fte_in_bits {
 	u8         reserved_at_120[0xe0];
 };
 
-struct mlx5_ifc_create_cq_out_bits {
-	u8         reserved_at_0[0x40];
-
-	u8         reserved_at_40[0x8];
-	u8         cqn[0x18];
-
-	u8         reserved_at_60[0x20];
-};
-
 struct mlx5_ifc_destroy_cq_in_bits {
 	u8         opcode[0x10];
 	u8         uid[0x10];
@@ -5708,6 +5703,104 @@ enum {
 
 enum {
 	MLX5_ENCRYPTION_STANDARD_AES_XTS  = 0x0,
+};
+
+struct mlx5_ifc_cqc_bits {
+    uint8_t         status[0x4];
+    uint8_t         as_notify[0x1];
+    uint8_t         initiator_src_dct[0x1];
+    uint8_t         dbr_umem_valid[0x1];
+    uint8_t         reserved_at_7[0x1];
+    uint8_t         cqe_sz[0x3];
+    uint8_t         cc[0x1];
+    uint8_t         reserved_at_c[0x1];
+    uint8_t         scqe_break_moderation_en[0x1];
+    uint8_t         oi[0x1];
+    uint8_t         cq_period_mode[0x2];
+    uint8_t         cqe_comp_en[0x1];
+    uint8_t         mini_cqe_res_format[0x2];
+    uint8_t         st[0x4];
+    uint8_t         reserved_at_18[0x1];
+    uint8_t         cqe_comp_layout[0x7];
+
+    uint8_t         dbr_umem_id[0x20];
+
+    uint8_t         reserved_at_40[0x14];
+    uint8_t         page_offset[0x6];
+    uint8_t         reserved_at_5a[0x2];
+    uint8_t         mini_cqe_res_format_ext[0x2];
+    uint8_t         cq_timestamp_format[0x2];
+
+    uint8_t         reserved_at_60[0x3];
+    uint8_t         log_cq_size[0x5];
+    uint8_t         uar_page[0x18];
+
+    uint8_t         reserved_at_80[0x4];
+    uint8_t         cq_period[0xc];
+    uint8_t         cq_max_count[0x10];
+
+    uint8_t         reserved_at_a0[0x18];
+    uint8_t         c_eqn[0x8];
+
+    uint8_t         reserved_at_c0[0x3];
+    uint8_t         log_page_size[0x5];
+    uint8_t         reserved_at_c8[0x18];
+
+    uint8_t         reserved_at_e0[0x20];
+
+    uint8_t         reserved_at_100[0x8];
+    uint8_t         last_notified_index[0x18];
+
+    uint8_t         reserved_at_120[0x8];
+    uint8_t         last_solicit_index[0x18];
+
+    uint8_t         reserved_at_140[0x8];
+    uint8_t         consumer_counter[0x18];
+
+    uint8_t         reserved_at_160[0x8];
+    uint8_t         producer_counter[0x18];
+
+    uint8_t         local_partition_id[0xc];
+    uint8_t         process_id[0x14];
+
+    uint8_t         reserved_at_1a0[0x20];
+
+    uint8_t         dbr_addr[0x40];
+};
+
+struct mlx5_ifc_create_cq_out_bits {
+    uint8_t         status[0x8];
+    uint8_t         reserved_at_8[0x18];
+
+    uint8_t         syndrome[0x20];
+
+    uint8_t         reserved_at_40[0x8];
+    uint8_t         cqn[0x18];
+
+    uint8_t         reserved_at_60[0x20];
+};
+
+struct mlx5_ifc_create_cq_in_bits {
+    uint8_t         opcode[0x10];
+    uint8_t         uid[0x10];
+
+    uint8_t         reserved_at_20[0x10];
+    uint8_t         op_mod[0x10];
+
+    uint8_t         reserved_at_40[0x40];
+
+    struct mlx5_ifc_cqc_bits cqc;
+
+    uint8_t         cq_umem_offset[0x40];
+
+    uint8_t         cq_umem_id[0x20];
+
+    uint8_t         cq_umem_valid[0x1];
+    uint8_t         reserved_at_2e1[0x1f];
+
+    uint8_t         reserved_at_300[0x580];
+
+    uint8_t         pas[];
 };
 
 #endif /* MLX5_IFC_H */

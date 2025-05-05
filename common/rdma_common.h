@@ -4,6 +4,7 @@
 #include <cstdarg>
 #include <cstring>
 #include <syslog.h>
+#include <arpa/inet.h>
 
 #ifdef __linux__
 #include <unistd.h>
@@ -79,22 +80,6 @@ inline size_t get_cache_line_size() {
     // Fallback to common 64 bytes for non-Linux systems
     return 64;
 #endif
-}
-
-//==============================================================================
-// template memory allocation
-//==============================================================================
-template <typename T>
-T* aligned_alloc(size_t size) {
-    const size_t cache_line_size = get_cache_line_size();
-    const size_t alignment = (alignof(T) < cache_line_size) ? cache_line_size : alignof(T);
-    
-    void* ptr = nullptr;
-    if (posix_memalign(&ptr, alignment, size * sizeof(T)) != 0) {
-        return nullptr;
-    }
-    memset(ptr, 0, size * sizeof(T));
-    return static_cast<T*>(ptr);
 }
 
 enum LogLevel {
@@ -241,3 +226,75 @@ static unsigned tlx_ffs64(uint64_t n)
 
 /* The i-th bit */
 #define TLX_BIT_GET(_value, _i)  (!!((_value) & TLX_BIT(_i)))
+
+//==============================================================================
+// template memory allocation
+//==============================================================================
+template <typename T>
+T* aligned_alloc(size_t size, size_t* allocated_size = nullptr) {
+    const size_t page_line_size = get_page_size();
+    const size_t alignment = (alignof(T) < page_line_size) ? page_line_size : alignof(T);
+    
+    void* ptr = nullptr;
+    if (posix_memalign(&ptr, alignment, size * sizeof(T)) != 0) {
+        return nullptr;
+    }
+
+    log_debug("Allocated %zu bytes at %p with alignment %zu", size * sizeof(T), ptr, alignment);
+    memset(ptr, 0, size * sizeof(T));  // Updated to use size instead of *allocated_size
+
+    if (allocated_size) {
+        *allocated_size = size * sizeof(T);
+    }
+
+    return static_cast<T*>(ptr);
+}
+
+#define MLX5_ALWAYS_INLINE      inline __attribute__ ((always_inline))
+
+static MLX5_ALWAYS_INLINE
+void mlx5_set_data_seg(struct mlx5_wqe_data_seg *seg,
+			           uint32_t length, uint32_t lkey,
+			           uintptr_t address)
+{
+	seg->byte_count = htonl(length);
+	seg->lkey       = htonl(lkey);
+	seg->addr       = htobe64((uintptr_t)address);
+}
+
+static MLX5_ALWAYS_INLINE
+void mlx5_set_ctrl_qpn_ds(struct mlx5_wqe_ctrl_seg *ctrl, uint32_t qp_num, uint8_t ds)
+{
+    ctrl->qpn_ds = htonl((qp_num << 8) | ds);
+}
+
+static MLX5_ALWAYS_INLINE
+void mlx5_set_ctrl_seg(struct mlx5_wqe_ctrl_seg *seg, uint16_t pi,
+			           uint8_t opcode, uint8_t opmod, uint32_t qp_num,
+			           uint8_t fm_ce_se, uint8_t ds,
+			           uint8_t signature, uint32_t imm)
+{
+	seg->opmod_idx_opcode      = htobe32(((pi & 0xffff) << 8) | opcode | (opmod << 24));
+    mlx5_set_ctrl_qpn_ds(seg, qp_num, ds);
+	seg->fm_ce_se		       = fm_ce_se;
+    seg->signature		       = signature;
+    seg->dci_stream_channel_id = 0;
+    seg->imm		           = imm;
+	/*
+	 * The caller should prepare "imm" in advance based on WR opcode.
+	 * For IBV_WR_SEND_WITH_IMM and IBV_WR_RDMA_WRITE_WITH_IMM,
+	 * the "imm" should be assigned as is.
+	 * For the IBV_WR_SEND_WITH_INV, it should be htobe32(imm).
+	 */
+
+}
+
+static MLX5_ALWAYS_INLINE
+void mlx5_set_rdma_seg(struct mlx5_wqe_raddr_seg *raddr, 
+                       void* rdma_raddr, uintptr_t rdma_rkey)
+{
+
+    raddr->raddr = htobe64((intptr_t)rdma_raddr);
+    raddr->rkey  = htonl(rdma_rkey);
+    raddr->reserved = 0;
+}

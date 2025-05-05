@@ -2,6 +2,9 @@
 #include <cstring>
 #include <poll.h>
 
+#include "../common/mmio.h"
+
+
 using namespace std;
 
 //============================================================================
@@ -45,6 +48,77 @@ void rdma_device::destroy() {
     _device = nullptr;
 }
 
+STATUS
+rdma_device::query_hca_capabilities() {
+    uint32_t hca_cap_in[DEVX_ST_SZ_DW(query_hca_cap_in)] = {0};
+    uint32_t hca_cap_out[DEVX_ST_SZ_DW(query_hca_cap_out)] = {0};
+
+    DEVX_SET(query_hca_cap_in, hca_cap_in, opcode, MLX5_CMD_OP_QUERY_HCA_CAP);
+    DEVX_SET(query_hca_cap_in, hca_cap_in, op_mod, MLX5_SET_HCA_CAP_OP_MOD_GENERAL_DEVICE);
+
+    int status = mlx5dv_devx_general_cmd(_context, hca_cap_in, sizeof(hca_cap_in), hca_cap_out, sizeof(hca_cap_out));
+    if (status) {
+        log_error("Failed to query HCA capabilities");
+        return STATUS_ERR;
+    }
+
+    void* hca_cap = DEVX_ADDR_OF(query_hca_cap_out, hca_cap_out, capability);
+
+    _hca_cap.log_max_srq_sz               = DEVX_GET(cmd_hca_cap, hca_cap, log_max_srq_sz);
+    _hca_cap.log_max_qp_sz                = DEVX_GET(cmd_hca_cap, hca_cap, log_max_qp_sz);
+    _hca_cap.log_max_qp                   = DEVX_GET(cmd_hca_cap, hca_cap, log_max_qp);
+    _hca_cap.log_max_srq                  = DEVX_GET(cmd_hca_cap, hca_cap, log_max_srq);
+    _hca_cap.log_max_cq_sz                = DEVX_GET(cmd_hca_cap, hca_cap, log_max_cq_sz);
+    _hca_cap.log_max_cq                   = DEVX_GET(cmd_hca_cap, hca_cap, log_max_cq);
+    _hca_cap.log_max_eq_sz                = DEVX_GET(cmd_hca_cap, hca_cap, log_max_eq_sz);
+    _hca_cap.log_max_mkey                 = DEVX_GET(cmd_hca_cap, hca_cap, log_max_mkey);
+    _hca_cap.log_max_eq                   = DEVX_GET(cmd_hca_cap, hca_cap, log_max_eq);
+    _hca_cap.log_max_klm_list_size        = DEVX_GET(cmd_hca_cap, hca_cap, log_max_klm_list_size);
+    _hca_cap.log_max_ra_req_qp            = DEVX_GET(cmd_hca_cap, hca_cap, log_max_ra_req_qp);
+    _hca_cap.log_max_ra_res_qp            = DEVX_GET(cmd_hca_cap, hca_cap, log_max_ra_res_qp);
+    _hca_cap.log_max_msg                  = DEVX_GET(cmd_hca_cap, hca_cap, log_max_msg);
+    _hca_cap.max_tc                       = DEVX_GET(cmd_hca_cap, hca_cap, max_tc);
+    _hca_cap.log_max_mcg                  = DEVX_GET(cmd_hca_cap, hca_cap, log_max_mcg);
+    _hca_cap.log_max_pd                   = DEVX_GET(cmd_hca_cap, hca_cap, log_max_pd);
+    _hca_cap.log_max_xrcd                 = DEVX_GET(cmd_hca_cap, hca_cap, log_max_xrcd);
+    _hca_cap.log_max_rq                   = DEVX_GET(cmd_hca_cap, hca_cap, log_max_rq);
+    _hca_cap.log_max_sq                   = DEVX_GET(cmd_hca_cap, hca_cap, log_max_sq);
+    _hca_cap.log_max_tir                  = DEVX_GET(cmd_hca_cap, hca_cap, log_max_tir);
+    _hca_cap.log_max_tis                  = DEVX_GET(cmd_hca_cap, hca_cap, log_max_tis);
+    _hca_cap.log_max_rmp                  = DEVX_GET(cmd_hca_cap, hca_cap, log_max_rmp);
+    _hca_cap.log_max_rqt                  = DEVX_GET(cmd_hca_cap, hca_cap, log_max_rqt);
+    _hca_cap.log_max_rqt_size             = DEVX_GET(cmd_hca_cap, hca_cap, log_max_rqt_size);
+    _hca_cap.log_max_tis_per_sq           = DEVX_GET(cmd_hca_cap, hca_cap, log_max_tis_per_sq);
+    _hca_cap.log_max_stride_sz_rq         = DEVX_GET(cmd_hca_cap, hca_cap, log_max_stride_sz_rq);
+    _hca_cap.log_min_stride_sz_rq         = DEVX_GET(cmd_hca_cap, hca_cap, log_min_stride_sz_rq);
+    _hca_cap.log_max_stride_sz_sq         = DEVX_GET(cmd_hca_cap, hca_cap, log_max_stride_sz_sq);
+    _hca_cap.log_min_stride_sz_sq         = DEVX_GET(cmd_hca_cap, hca_cap, log_min_stride_sz_sq);
+    _hca_cap.log_max_hairpin_queues       = DEVX_GET(cmd_hca_cap, hca_cap, log_max_hairpin_queues);
+    _hca_cap.log_max_hairpin_wq_data_sz   = DEVX_GET(cmd_hca_cap, hca_cap, log_max_hairpin_wq_data_sz);
+    _hca_cap.log_max_hairpin_num_packets  = DEVX_GET(cmd_hca_cap, hca_cap, log_max_hairpin_num_packets);
+    _hca_cap.log_max_wq_sz                = DEVX_GET(cmd_hca_cap, hca_cap, log_max_wq_sz);
+    _hca_cap.log_max_vlan_list            = DEVX_GET(cmd_hca_cap, hca_cap, log_max_vlan_list);
+    _hca_cap.log_max_current_mc_list      = DEVX_GET(cmd_hca_cap, hca_cap, log_max_current_mc_list);
+    _hca_cap.log_max_current_uc_list      = DEVX_GET(cmd_hca_cap, hca_cap, log_max_current_uc_list);
+    _hca_cap.log_max_transport_domain     = DEVX_GET(cmd_hca_cap, hca_cap, log_max_transport_domain);
+    _hca_cap.log_max_flow_counter_bulk    = DEVX_GET(cmd_hca_cap, hca_cap, log_max_flow_counter_bulk);
+    _hca_cap.log_max_flow_counter_bulk    = DEVX_GET(cmd_hca_cap, hca_cap, log_max_flow_counter_bulk);
+    _hca_cap.log_max_l2_table             = DEVX_GET(cmd_hca_cap, hca_cap, log_max_l2_table);
+    _hca_cap.log_uar_page_sz              = DEVX_GET(cmd_hca_cap, hca_cap, log_uar_page_sz);
+    _hca_cap.log_max_pasid                = DEVX_GET(cmd_hca_cap, hca_cap, log_max_pasid);
+    _hca_cap.log_max_dct_connections      = DEVX_GET(cmd_hca_cap, hca_cap, log_max_dct_connections);
+    _hca_cap.log_max_atomic_size_qp       = DEVX_GET(cmd_hca_cap, hca_cap, log_max_atomic_size_qp);
+    _hca_cap.log_max_atomic_size_dc       = DEVX_GET(cmd_hca_cap, hca_cap, log_max_atomic_size_dc);
+    _hca_cap.log_max_xrq                  = DEVX_GET(cmd_hca_cap, hca_cap, log_max_xrq);
+    _hca_cap.native_port_num              = DEVX_GET(cmd_hca_cap, hca_cap, native_port_num);
+    _hca_cap.num_ports                    = DEVX_GET(cmd_hca_cap, hca_cap, num_ports);
+
+    log_debug("HCA Capabilities successfully queried, log_max_qp_sz: %u", _hca_cap.log_max_qp_sz);
+    log_debug("HCA log_max_cq_sz: %u, log_max_cq: %u", _hca_cap.log_max_cq_sz, _hca_cap.log_max_cq);
+
+    return STATUS_OK;
+}
+
 STATUS rdma_device::initialize(const std::string& device_name) {
     _device_list = ibv_get_device_list(nullptr);
     if (!_device_list) {
@@ -86,6 +160,9 @@ STATUS rdma_device::initialize(const std::string& device_name) {
     }
 
     print_device_attr();
+
+    STATUS res = query_hca_capabilities();
+    RETURN_IF_FAILED(res);
 
     return STATUS_OK;
 }
@@ -370,26 +447,26 @@ user_memory::initialize(ibv_context* context, size_t size) {
     }
 
     // Fix: don't redeclare _umem_buf as a local variable, update the class member directly
-    _umem_buf = aligned_alloc<char>(size);
-    log_debug("Allocated user memory address: %p, size:%zu", _umem_buf, size);
+    size_t allocated_size;
+    _umem_buf = aligned_alloc<char>(size, &allocated_size);
+    log_debug("Allocated user memory address: %p, size:%zu", _umem_buf, allocated_size);
 
-    if (!_umem_buf || size == 0) {
+    if (!_umem_buf || allocated_size == 0) {
         return STATUS_ERR;
     }
 
     uint32_t access = IBV_ACCESS_LOCAL_WRITE
                     | IBV_ACCESS_REMOTE_WRITE
-                    | IBV_ACCESS_REMOTE_READ
-                    | IBV_ACCESS_RELAXED_ORDERING;         
+                    | IBV_ACCESS_REMOTE_READ;         
 
-    auto* reg = mlx5dv_devx_umem_reg(context, _umem_buf, size, access);
+    auto* reg = mlx5dv_devx_umem_reg(context, _umem_buf, allocated_size, access);
     if (!reg) {
         free(_umem_buf);
         _umem_buf = nullptr;
         return STATUS_ERR;
     }
 
-    _size = size;
+    _size = allocated_size;
     _umem = reg;
     _umem_id = reg->umem_id;
     _initialized = true;
@@ -441,10 +518,10 @@ uar::destroy() {
 STATUS
 uar::initialize(ibv_context* ctx) {
     
-    uint32_t access = MLX5DV_UAR_ALLOC_TYPE_BF
-                    | MLX5DV_UAR_ALLOC_TYPE_NC
-                    | MLX5DV_UAR_ALLOC_TYPE_NC_DEDICATED;   
+    uint32_t access = MLX5DV_UAR_ALLOC_TYPE_NC;
 
+    log_debug("Using UAR access type: %u", access);
+    
     _uar = mlx5dv_devx_alloc_uar(ctx, access);
     if (!_uar) {
         log_error("Failed to allocate UAR");
@@ -543,6 +620,9 @@ memory_region::destroy() {
         mlx5dv_devx_obj_destroy(_cross_mr);
     }
 
+    if (_umem) {
+        destroy_user_memory();
+    }
     _cross_mr = nullptr;
 }
 
@@ -551,69 +631,35 @@ memory_region::initialize(
     rdma_device* rdevice,
     queue_pair* qp,
     protection_domain* pd,
-    void* addr,
     size_t length
 ) {
-
-    mlx5dv_devx_umem_in umem_in;
-    void *aligned_address;
-
     if (_cross_mr) {
         return STATUS_OK;
     }
 
+    _rdevice = rdevice;
+    _qp      = qp;
+    _length  = length;
+
+    STATUS res = create_user_memory(rdevice, length);
+    RETURN_IF_FAILED(res);
+
     // Print all fields for debugging
-    log_debug("Registering user memory with these parameters:");
-    log_debug("  addr: %p", addr);
-    log_debug("  size: %zu", length);
-    log_debug("  access: 0x%x", IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
+    log_debug("Registering memory region with these parameters:");
+    log_debug("  addr: %p", _addr);
+    log_debug("  size: %zu", _length);
 
-    // Store the original values
-    _addr = addr;
-    _length = length;
-
-    // Use system page size for alignment
-    size_t page_size = get_page_size();
-    uintptr_t addr_val = (uintptr_t)addr;
-    uintptr_t aligned_addr_val = addr_val & ~(page_size - 1);
-    aligned_address = (void*)aligned_addr_val;
-
-    log_debug("  page_size: %zu", page_size);
-    log_debug("  aligned_address: %p", aligned_address);
-
-    // Set appropriate page size bitmap (typical system page size is 4KB = 0x1000)
-    umem_in.addr = addr;
-    umem_in.size = length;
-    umem_in.access = IBV_ACCESS_LOCAL_WRITE |
-                     IBV_ACCESS_REMOTE_READ |
-                     IBV_ACCESS_REMOTE_WRITE;
-    umem_in.pgsz_bitmap = 1ULL << (ffs(page_size) - 1);  // Set bit corresponding to page size
-    umem_in.comp_mask = 0;
-
-    log_debug("  pgsz_bitmap: 0x%lx", umem_in.pgsz_bitmap);
-    log_debug("  comp_mask: 0x%x", umem_in.comp_mask);
-
-    _umem = mlx5dv_devx_umem_reg_ex(rdevice->get_context(), &umem_in);
-    if (_umem == nullptr) {
-        log_error("Failed to register user memory, error: %s (errno=%d)", strerror(errno), errno);
-        return STATUS_ERR;
-    }
 
     uint32_t mkey_in[DEVX_ST_SZ_DW(create_mkey_in)] = {0};
     uint32_t mkey_out[DEVX_ST_SZ_DW(create_mkey_out)] = {0};
 
     DEVX_SET(create_mkey_in, mkey_in, opcode, MLX5_CMD_OP_CREATE_MKEY);
+    DEVX_SET(create_mkey_in, mkey_in, mkey_umem_valid, 1);
+    DEVX_SET(create_mkey_in, mkey_in, mkey_umem_id, _umem->get()->umem_id);
+    DEVX_SET(create_mkey_in, mkey_in, mkey_umem_offset, 0);
+    DEVX_SET(create_mkey_in, mkey_in, translations_octword_actual_size, 8);
 
-    // Set opcode and sizes
-    DEVX_SET(create_mkey_in, mkey_in, translations_octword_actual_size, 1);
-    
-    // The key fields from UCX implementation: set the UMEM ID directly
-    DEVX_SET(create_mkey_in, mkey_in, mkey_umem_id, _umem->umem_id);
-    DEVX_SET64(create_mkey_in, mkey_in, mkey_umem_offset, 0);
-    
-    // Configure the Memory Key Context
     void *mkc = DEVX_ADDR_OF(create_mkey_in, mkey_in, memory_key_mkey_entry);
-    
     DEVX_SET(mkc, mkc, access_mode_1_0, MLX5_MKC_ACCESS_MODE_MTT);
     DEVX_SET(mkc, mkc, a, 1);      // Atomic operations
     DEVX_SET(mkc, mkc, rw, 1);     // Remote write
@@ -621,13 +667,13 @@ memory_region::initialize(
     DEVX_SET(mkc, mkc, lw, 1);     // Local write
     DEVX_SET(mkc, mkc, lr, 1);     // Local read
     DEVX_SET(mkc, mkc, pd, pd->get_pdn());
-    DEVX_SET(mkc, mkc, qpn, qp->get_qpn());
-    DEVX_SET(mkc, mkc, mkey_7_0, 0);  // Will be assigned by hardware
-    
-    // Set memory range
-    DEVX_SET64(mkc, mkc, start_addr, (uint64_t)addr);
+    DEVX_SET(mkc, mkc, qpn, 0xFFFFFF);    
+    DEVX_SET(mkc, mkc, mkey_7_0, 0xef);
+    DEVX_SET64(mkc, mkc, start_addr, (intptr_t)_addr);
     DEVX_SET64(mkc, mkc, len, length);
-    
+    DEVX_SET(mkc, mkc, translations_octword_size, 8);
+    DEVX_SET(mkc, mkc, log_page_size, get_page_size_log());
+
     // Create the MKEY object
     _cross_mr = mlx5dv_devx_obj_create(rdevice->get_context(),
                                        mkey_in, sizeof(mkey_in), 
@@ -639,11 +685,36 @@ memory_region::initialize(
     }
     
     // Extract the created mkey
-    _lkey = (DEVX_GET(create_mkey_out, mkey_out, mkey_index) << 8);
+    uint32_t mkey_index = DEVX_GET(create_mkey_out, mkey_out, mkey_index);
+    
+    // For ConnectX-4/5/6, the low 8 bits should be 0xef for user-space keys
+    _lkey = (mkey_index << 8) | 0xef;
     _rkey = _lkey;
 
+
+
     log_debug("Successfully created DEVX memory region");
-    log_debug("MKey: 0x%x", _lkey);
+    log_debug("MKey: 0x%x (index: 0x%x)", _lkey, mkey_index);
+
+    /*
+    struct ibv_mr* mr = ibv_reg_mr(pd->get(), _addr, _length,
+                               IBV_ACCESS_LOCAL_WRITE |
+                               IBV_ACCESS_REMOTE_WRITE |
+                               IBV_ACCESS_REMOTE_READ);
+    if (!mr) {
+        log_error("Failed to register memory region using ibv_reg_mr: %s", strerror(errno));
+        if (_umem) { destroy_user_memory(); _umem = nullptr; }
+        return STATUS_ERR;
+    }
+    _lkey = mr->lkey;
+    _rkey = mr->rkey;
+
+    // Store the ibv_mr handle if needed for deregistration later
+    // _ibv_mr_handle = mr; // Add a member to store this if needed for destroy()
+
+    log_debug("Successfully registered memory region using ibv_reg_mr");
+    log_debug("MR Keys: lkey=0x%x, rkey=0x%x", _lkey, _rkey);
+    */
 
     return STATUS_OK;
 }
@@ -693,110 +764,261 @@ memory_region::get_mr_flags() const {
     return _mr_flags;
 }
 
-
-
 //============================================================================
-// Completion Queue Implementation
+// Completion DEVX Queue Implementation
 //============================================================================
 
-completion_queue::completion_queue() :
-    _pcq(nullptr)
+completion_queue_devx::completion_queue_devx() :
+    _cq(nullptr),
+    _cqn(0),
+    _consumer_index(0)
 {}
 
-completion_queue::~completion_queue() {
+completion_queue_devx::~completion_queue_devx() {
     destroy();
 }
 
 void
-completion_queue::destroy() {
-    if (_pcq) {
-        log_debug("Destroying completion queue with cqn: %d", _cqn);
-        ibv_destroy_cq(ibv_cq_ex_to_cq(_pcq));
-        _pcq = nullptr;
-    }
+completion_queue_devx::set_cq_hw_params(cq_hw_params& params) {
+    // Store the provided parameters
+    _cq_hw_params = params;
+    
+    // Log the parameters for debugging purposes
+    log_debug("Setting CQ hardware parameters:");
+    log_debug("  log_cq_size: %u", params.log_cq_size);
+    log_debug("  log_page_size: %u", params.log_page_size);
+    log_debug("  cqe_sz: %u", params.cqe_sz);
+    log_debug("  cqe_comp_en: %s", params.cqe_comp_en ? "true" : "false");
+    log_debug("  cq_period_mode: %u", params.cq_period_mode);
+    log_debug("  cq_period: %u", params.cq_period);
+    log_debug("  cq_max_count: %u", params.cq_max_count);
+}
 
-    if (_pdv_cq) {
-        free(_pdv_cq);
-        _pdv_cq = nullptr;
-    }
+cq_hw_params
+completion_queue_devx::get_cq_hw_params() const {
+    return _cq_hw_params;
 }
 
 STATUS
-completion_queue::initialize(cq_creation_params& params) {
-    if (_pcq) {
-        return STATUS_OK;
-    }
-    _consumer_index = 0;
-    // Create completion channel
-    _comp_channel = ibv_create_comp_channel(params.context);
-    if (!_comp_channel) {
-        log_error("Failed to create completion channel");
+completion_queue_devx::initialize_cq_resources(
+    rdma_device* rdevice,
+    cq_hw_params& cq_hw_params
+) {
+    _rdevice = rdevice;
+
+    const hca_capabilities& caps = rdevice->get_hca_cap();
+    uint8_t max_log_cq_size = caps.log_max_cq_sz;
+
+    _uar->initialize(rdevice->get_context());
+    if (_uar->get() == nullptr) {
+        log_error("Failed to initialize UAR");
         return STATUS_ERR;
     }
-    // Assign channel to CQ attributes
-    params.cq_attr_ex->channel = _comp_channel;
-    _pcq = mlx5dv_create_cq(params.context, params.cq_attr_ex , params.dv_cq_attr);
-    if (!_pcq) {
-        log_error("Failed to create completion queue, error: %s", strerror(errno));
-        ibv_destroy_comp_channel(_comp_channel);
-        _comp_channel = nullptr;
+
+    _umem_db->initialize(rdevice->get_context(), 1024);
+    if (_umem_db->get() == nullptr) {
+        log_error("Failed to initialize user memory for DB");
         return STATUS_ERR;
     }
-    _pdv_cq = aligned_alloc<mlx5dv_cq>(sizeof(mlx5dv_cq));
-    if (!_pdv_cq) {
-        log_error("Failed to allocate memory for mlx5dv_cq");
-        ibv_destroy_cq(ibv_cq_ex_to_cq(_pcq));
-        ibv_destroy_comp_channel(_comp_channel);
-        _comp_channel = nullptr;
+
+    if (cq_hw_params.log_cq_size == 0 || 
+        cq_hw_params.log_cq_size > max_log_cq_size) {
+        cq_hw_params.log_cq_size = 9;
+    }
+    
+    const size_t cqe_size = 64;
+    uint32_t cq_entries = 1U << cq_hw_params.log_cq_size;
+
+    log_debug("Allocating user memory for CQ: %u entries (%u bytes per entry),%zu bytes total (log_cq_size=%u)",
+              cq_entries,
+              cqe_size,
+              cq_entries * cqe_size,
+              cq_hw_params.log_cq_size);
+    
+    _umem->initialize(rdevice->get_context(), cq_entries * cqe_size);
+    if (_umem->get() == nullptr) {
+        log_error("Failed to initialize user memory for CQ");
         return STATUS_ERR;
     }
-    struct mlx5dv_obj dv_obj = {};
-    dv_obj.cq.in  = ibv_cq_ex_to_cq(_pcq);
-    dv_obj.cq.out = _pdv_cq;
-    if (mlx5dv_init_obj(&dv_obj, MLX5DV_OBJ_CQ)) {
-        log_error("Failed to initialize mlx5dv_cq");
-        ibv_destroy_cq(ibv_cq_ex_to_cq(_pcq));
-        ibv_destroy_comp_channel(_comp_channel);
-        _comp_channel = nullptr;
+
+    void* cqe_buffer = _umem->get_umem_buf();
+    if (!cqe_buffer) {
+        log_error("Failed to get CQE buffer");
         return STATUS_ERR;
     }
-    _cqn = _pdv_cq->cqn;
+
+    memset(cqe_buffer, 0, cq_entries * cqe_size);
+    uint32_t cq_mask = cq_entries - 1;
+    for (size_t i = 0; i < cq_entries; ++i) {
+        struct mlx5_cqe64* cqe = (struct mlx5_cqe64*)((char*)cqe_buffer + i * cqe_size);
+        uint8_t owner = ((i & (cq_mask + 1)) ? 1 : 0);
+        cqe->op_own = (MLX5_CQE_INVALID << 4) | owner;
+    }
+
+    log_debug("CQE buffer initialized with op_own and correct owner bits");
+
+    return STATUS_OK;
+}
+
+STATUS
+completion_queue_devx::initialize(
+    rdma_device* rdevice,
+    cq_hw_params& cq_hw_params_list
+) {
+    STATUS status = initialize_cq_resources(rdevice, cq_hw_params_list);
+    RETURN_IF_FAILED(status);
+
+    uint32_t eqn = 0;
+    if (mlx5dv_devx_query_eqn(rdevice->get_context(), 0, &eqn)) {
+        log_error("Failed to query EQN");
+        return STATUS_ERR;
+    }
+
+    // Initialize with zeros
+    uint32_t in[DEVX_ST_SZ_DW(create_cq_in)]  = {0};
+    uint32_t out[DEVX_ST_SZ_DW(create_cq_out)] = {0};
+
+    DEVX_SET(create_cq_in, in, opcode, MLX5_CMD_OP_CREATE_CQ);
+    void* cq_context = DEVX_ADDR_OF(create_cq_in, in, cqc);
+
+    DEVX_SET(cqc, cq_context, c_eqn, eqn);
+    DEVX_SET(cqc, cq_context, uar_page, _uar->get()->page_id);
+    DEVX_SET(cqc, cq_context, log_cq_size, cq_hw_params_list.log_cq_size);
+
+    DEVX_SET(cqc, cq_context, cqe_sz, 0);
+    
+    DEVX_SET(cqc, cq_context, dbr_umem_valid, 1);
+    DEVX_SET(cqc, cq_context, dbr_umem_id, _umem_db->get()->umem_id);
+    
+    DEVX_SET(create_cq_in, in, cq_umem_valid, 1);
+    DEVX_SET(create_cq_in, in, cq_umem_id, _umem->get()->umem_id);
+    DEVX_SET(create_cq_in, in, cq_umem_offset, 0);
+    
+    log_debug("Creating CQ with parameters:");
+    log_debug("  log_cq_size: %u", cq_hw_params_list.log_cq_size);
+    log_debug("  cqe_sz: 0 (64 bytes)");
+    log_debug("  eqn: %u", eqn);
+    log_debug("  uar_page: %u", _uar->get()->page_id);
+    log_debug("  umem_id: %u", _umem->get()->umem_id);
+    log_debug("  dbr_umem_id: %u", _umem_db->get()->umem_id);
+
+    _cq = mlx5dv_devx_obj_create(_rdevice->get_context(), in, sizeof(in), out, sizeof(out));
+    if (!_cq) {
+        log_error("Failed to create completion queue, error: %d (%s)", errno, strerror(errno));
+        log_error("Syndrome: 0x%x", DEVX_GET(create_cq_out, out, syndrome));
+        return STATUS_ERR;
+    }
+
+    _cqn = DEVX_GET(create_cq_out, out, cqn);
     log_debug("Created completion queue with cqn: %d", _cqn);
 
     return STATUS_OK;
 }
 
-STATUS completion_queue::poll_cq() {
-    if (!_pdv_cq) return STATUS_ERR;
-    volatile struct mlx5_cqe64* cqe_buf = (volatile struct mlx5_cqe64*)_pdv_cq->buf;
-    int cqe_cnt = _pdv_cq->cqe_cnt;
-    int ci = _consumer_index % cqe_cnt;
-    volatile struct mlx5_cqe64* cqe = &cqe_buf[ci];
-    uint8_t owner = cqe->op_own & 0x1;
+STATUS
+completion_queue_devx::poll_cq() {
+    if (!_umem || !_umem_db) return STATUS_ERR;
+    void* cqe_buf = _umem->addr();
+    if (!cqe_buf) return STATUS_ERR;
+
+    uint32_t cqe_cnt = 1U << _cq_hw_params.log_cq_size;
+    uint32_t ci = _consumer_index % cqe_cnt;
+    volatile struct mlx5_cqe64* cqe = 
+            (volatile struct mlx5_cqe64*)((char*)cqe_buf + ci * sizeof(struct mlx5_cqe64));
+
+    uint8_t owner = mlx5dv_get_cqe_owner((struct mlx5_cqe64*)cqe);
     uint8_t expected_owner = (_consumer_index / cqe_cnt) & 0x1;
-    uint8_t opcode = cqe->op_own >> 4;
-    log_debug("[CQ poll] ci=%d owner=%u expected_owner=%u opcode=0x%x wqe_counter=%u byte_cnt=%u", ci, owner, expected_owner, opcode, cqe->wqe_counter, cqe->byte_cnt);
-    if (owner == expected_owner && opcode != 0xf) {
-        log_info("DEVX CQE received: opcode=%u, wqe_counter=%u, byte_cnt=%u", opcode, cqe->wqe_counter, cqe->byte_cnt);
+    uint8_t opcode = mlx5dv_get_cqe_opcode((struct mlx5_cqe64*)cqe);
+    uint8_t se = mlx5dv_get_cqe_se((struct mlx5_cqe64*)cqe);
+    uint8_t format = mlx5dv_get_cqe_format((struct mlx5_cqe64*)cqe);
+
+    //log_debug("[DEVX CQ poll] ci=%u owner=%u expected_owner=%u opcode=0x%x se=%u format=%u wqe_counter=%u byte_cnt=%u",
+    //          ci, owner, expected_owner, opcode, se, format, cqe->wqe_counter, cqe->byte_cnt);
+
+    if (owner == expected_owner && (opcode != 0x0)) {
+        const volatile struct mlx5_err_cqe* err_cqe = (const volatile struct mlx5_err_cqe*)cqe;
+        log_error("CQE error: opcode=0x%x", opcode);
+        log_error("  syndrome=0x%x", err_cqe->syndrome);
+        log_error("  vendor_err_synd=0x%x", err_cqe->vendor_err_synd);
+        log_error("  wqe_counter=0x%x", err_cqe->wqe_counter);
+        log_error("  s_wqe_opcode_qpn=0x%x", err_cqe->s_wqe_opcode_qpn);
+        log_error("  signature=0x%x", err_cqe->signature);
+        log_error("  op_own=0x%x", err_cqe->op_own);
+        log_error("  srqn=0x%x", err_cqe->srqn);
         _consumer_index++;
-        *(_pdv_cq->dbrec) = htobe32(_consumer_index & 0xffffff);
+        volatile uint32_t* dbrec = (volatile uint32_t*)_umem_db->addr();
+        *dbrec = htobe32(_consumer_index & 0xffffff);
+        __sync_synchronize();
+        return STATUS_ERR;
+    }
+
+    if (owner == expected_owner && opcode == 0x0) {
+        log_debug("DEVX CQE received: opcode=%u, wqe_counter=%u, byte_cnt=%u, timestamp=%llu",
+                  opcode, cqe->wqe_counter, cqe->byte_cnt, cqe->timestamp);
+        _consumer_index++;
+        volatile uint32_t* dbrec = (volatile uint32_t*)_umem_db->addr();
+        *dbrec = htobe32(_consumer_index & 0xffffff);
         __sync_synchronize();
         return STATUS_OK;
     }
+
     return STATUS_ERR;
 }
 
-uint32_t completion_queue::get_cqn() const {
-    return _cqn;
+#define MLX5_CQ_ARM_DB 0x1
+
+STATUS
+completion_queue_devx::arm_cq(int solicited)
+{
+    if (!_umem_db || !_uar) return STATUS_ERR;
+    volatile uint32_t* dbrec = (volatile uint32_t*)_umem_db->addr();
+    if (!dbrec) return STATUS_ERR;
+    void* uar_reg = _uar->get()->reg_addr;
+    if (!uar_reg) return STATUS_ERR;    
+
+    uint32_t sn = _arm_sn & 3;
+    uint32_t ci = _consumer_index & 0xffffff;
+
+    uint32_t cmd = solicited ? MLX5_CQ_DB_REQ_NOT_SOL : MLX5_CQ_DB_REQ_NOT;
+    uint64_t doorbell = ((uint64_t)(sn << 28 | cmd | ci) << 32) | _cqn;
+
+    log_debug("CQ Arming: sn=%u, ci=%u, cmd=%s, cqn=%u", 
+              sn, ci, solicited ? "solicited" : "unsolicited", _cqn);
+
+    dbrec[MLX5_CQ_ARM_DB] = htobe32(sn << 28 | cmd | ci);
+    __atomic_thread_fence(__ATOMIC_SEQ_CST);
+    volatile uint64_t* uar_db = (volatile uint64_t*)((char*)uar_reg + MLX5_CQ_DOORBELL);
+    *uar_db = htobe64(doorbell);
+    __atomic_thread_fence(__ATOMIC_SEQ_CST);
+    
+    return STATUS_OK;
 }
 
-struct ibv_cq* completion_queue::get() const {
-    return ibv_cq_ex_to_cq(_pcq);
+void
+completion_queue_devx::destroy() {
+    if (_cq) {
+        log_debug("Destroying completion queue with cqn: %d", _cqn);
+        mlx5dv_devx_obj_destroy(_cq);
+        _cq = nullptr;
+    }
+
+    if (_umem_db) {
+        _umem_db->destroy();
+    }
+
+    if (_umem) {
+        _umem->destroy();
+    }
+
+    if (_uar) {
+        _uar->destroy();
+    }
 }
 
 //============================================================================
 // Queue Pair Implementation
 //============================================================================
+
 
 queue_pair::queue_pair() :
     _qp(nullptr),
@@ -810,7 +1032,9 @@ queue_pair::queue_pair() :
     _sq_pi(0),
     _sq_ci(0),
     _sq_dbr_offset(0),
-    _sq_buf_offset(0)
+    _sq_buf_offset(0),
+    _bf_buf_size(0),
+    _bf_offset(0)
 {}
 
 queue_pair::~queue_pair() {
@@ -843,10 +1067,32 @@ queue_pair::get_qpn() const {
     return _qpn;
 }
 
+#define MLX5_RQ_STRIDE          2
+#define RDMA_WQE_SEG_SIZE       64   // Size of a WQE segment (one basic block)
+
 STATUS
 queue_pair::initialize(qp_init_creation_params& params) {
     if (_qp) {
         return STATUS_OK;
+    }
+
+    // uint8_t* sq_base = static_cast<uint8_t*>(params.umem_sq->addr());
+
+    // for (size_t i = 0; i < 2048 / 64; ++i) {
+    //      uint32_t* dst = reinterpret_cast<uint32_t*>(sq_base + (i * 64));
+
+    //      dst[0] = 0xBEEF0000ULL | i;
+
+    //      for (int q = 1; q < 8; ++q) {
+    //          dst[q] = 0xDEADBEEFDEADBEEFULL;
+    //     }
+    // }
+
+    if (params.rdevice) {
+        _rdevice = params.rdevice;
+    } else {
+        log_error("Invalid device");
+        return STATUS_ERR;
     }
 
     uint32_t in[DEVX_ST_SZ_DW(create_qp_in)]   = {0};
@@ -857,29 +1103,31 @@ queue_pair::initialize(qp_init_creation_params& params) {
     void* qpc = DEVX_ADDR_OF(create_qp_in, in, qpc);
 
     DEVX_SET(qpc, qpc, st, MLX5_QPC_ST_RC);
+    DEVX_SET(qpc, qpc, pm_state, MLX5_QPC_PM_STATE_MIGRATED);
 
     DEVX_SET(qpc, qpc, pd, params.pdn);
     DEVX_SET(qpc, qpc, cqn_snd, params.cqn);
     DEVX_SET(qpc, qpc, cqn_rcv, params.cqn);
 
-    DEVX_SET(qpc, qpc, log_sq_size, ilog2(params.sq_size));
-    DEVX_SET(qpc, qpc, log_rq_size, ilog2(params.rq_size));
-    DEVX_SET(qpc, qpc, log_rq_stride, 5);
-    DEVX_SET(qpc, qpc, no_sq, 0);
+    DEVX_SET(qpc, qpc, log_sq_size , ilog2(params.sq_size));
+    DEVX_SET(qpc, qpc, log_rq_size , ilog2(params.rq_size));
+    DEVX_SET(qpc, qpc, log_rq_stride, MLX5_RQ_STRIDE);    
 
+    DEVX_SET(qpc, qpc, no_sq, 0);
+    DEVX_SET(qpc, qpc, wq_signature, 0);
     DEVX_SET(qpc, qpc, uar_page, params.uar_obj->get()->page_id);
 
     DEVX_SET(qpc, qpc, dbr_umem_id, params.umem_db->get()->umem_id);
     DEVX_SET(qpc, qpc, dbr_umem_valid, 1);
+    DEVX_SET64(qpc, qpc, dbr_addr, 0);
+    DEVX_SET(qpc, qpc, log_msg_max, _rdevice->get_hca_cap().log_max_msg);
 
     DEVX_SET(create_qp_in, in, wq_umem_id, params.umem_sq->get()->umem_id);
     DEVX_SET(create_qp_in, in, wq_umem_valid, 1);
 
     DEVX_SET(qpc, qpc, log_page_size, get_page_size_log());
-    DEVX_SET(qpc, qpc, rae, 1);
-    DEVX_SET(qpc, qpc, rwe, 1);
-    DEVX_SET(qpc, qpc, rre, 1);
-    DEVX_SET(qpc, qpc, atomic_mode, 1);
+
+    DEVX_SET(qpc, qpc, page_offset, 0);
 
     DEVX_SET(qpc, qpc, log_rra_max, params.max_rd_atomic);
 
@@ -896,14 +1144,19 @@ queue_pair::initialize(qp_init_creation_params& params) {
     _uar = params.uar_obj;
     _umem_sq = params.umem_sq;
     _umem_db = params.umem_db;
-    _rdevice = params.rdevice;
+
+    _bf_buf_size = get_page_size();
     
     // Initialize send queue parameters
     _sq_size = params.sq_size;
     _sq_pi = 0;
     _sq_ci = 0;
-    _sq_dbr_offset = 0;  // Usually the first offset in the doorbell record
-    _sq_buf_offset = 0;  // Base offset in the send queue buffer
+
+    const size_t rq_stride_bytes = 16u << MLX5_RQ_STRIDE;
+    size_t rq_bytes = params.rq_size * rq_stride_bytes;
+
+    _sq_buf_offset = (rq_bytes + RDMA_WQE_SEG_SIZE - 1) & ~(RDMA_WQE_SEG_SIZE - 1); // Base offset in the send queue buffer
+    log_debug("Send queue buffer offset: %u", _sq_buf_offset);
     
     log_debug("Queue Pair initialized with qpn: %d, sq_size: %u", _qpn, _sq_size);
 
@@ -923,20 +1176,25 @@ queue_pair::reset_to_init(qp_init_connection_params& params) {
 
     void* qpc = DEVX_ADDR_OF(rst2init_qp_in, in, qpc);
 
+    DEVX_SET(qpc, qpc, rae, 1);
+    DEVX_SET(qpc, qpc, rwe, 1);
+    DEVX_SET(qpc, qpc, rre, 1);
+    DEVX_SET(qpc, qpc, atomic_mode, 1);
+
     if (!(_rdevice->get_port_attr(1)->link_layer == IBV_LINK_LAYER_ETHERNET)) {
         DEVX_SET(qpc, qpc, primary_address_path.pkey_index, 0);
     }
 
     DEVX_SET(qpc, qpc, primary_address_path.vhca_port_num, params.port_num);
     DEVX_SET(qpc, qpc, pm_state, MLX5_QPC_PM_STATE_MIGRATED);
-    DEVX_SET(qpc, qpc, mtu, params.mtu);
 
     if (mlx5dv_devx_obj_modify(_qp, in, sizeof(in), out, sizeof(out))) {
         log_error("Failed QP RST to INIT qpn: %d", _qpn);
+        log_error("Syndrome: 0x%x", DEVX_GET(rst2init_qp_out, out, syndrome));
         return STATUS_ERR;
     }
 
-    log_debug("Reset QP to INIT qpn: %d", _qpn);
+    log_debug("Reset QP to INIT qpn: 0x%x", _qpn);
     
     return STATUS_OK;
 }
@@ -948,20 +1206,62 @@ queue_pair::init_to_rtr(qp_init_connection_params &params)
         return STATUS_ERR;
     }
 
+    STATUS res = create_ah(params.pd, params.remote_ah_attr);
+    RETURN_IF_FAILED(res);
+
+    auto _ah_attr = params.remote_ah_attr;
+
+    mlx5_wqe_av mlx5_av = {};
+    objects_get_av(_ah ,&mlx5_av);
+
     uint32_t in[DEVX_ST_SZ_DW(init2rtr_qp_in)] = {0};
     uint32_t out[DEVX_ST_SZ_DW(init2rtr_qp_out)] = {0};
 
     DEVX_SET(init2rtr_qp_in, in, opcode, MLX5_CMD_OP_INIT2RTR_QP);
     DEVX_SET(init2rtr_qp_in, in, qpn, _qpn);
+    DEVX_SET(init2rtr_qp_in, in, ece, params.ece);
 
     void* qpc = DEVX_ADDR_OF(init2rtr_qp_in, in, qpc);
     DEVX_SET(qpc, qpc, mtu, params.mtu);
-    DEVX_SET(init2rtr_qp_in, in, ece, params.ece);
+    DEVX_SET(qpc, qpc, remote_qpn, params.remote_qpn);
+    DEVX_SET(qpc, qpc, primary_address_path.vhca_port_num, _ah_attr->port_num);
+    DEVX_SET(qpc, qpc, log_msg_max, _rdevice->get_hca_cap().log_max_msg);
+
+    if (_rdevice->get_port_attr(1)->link_layer == IBV_LINK_LAYER_ETHERNET) {
+        memcpy(DEVX_ADDR_OF(qpc, qpc, primary_address_path.rmac_47_32),
+                mlx5_av.rmac, sizeof(mlx5_av.rmac));
+        memcpy(DEVX_ADDR_OF(qpc, qpc, primary_address_path.rgid_rip),
+                mlx5_av.rgid, sizeof(mlx5_av.rgid));
+
+        DEVX_SET(qpc, qpc, primary_address_path.hop_limit, mlx5_av.hop_limit);
+        DEVX_SET(qpc, qpc, primary_address_path.src_addr_index, _ah_attr->grh.sgid_index);
+        DEVX_SET(qpc, qpc, primary_address_path.eth_prio, params.sl);
+        // Use recommended RoCE v2 UDP source port calculation
+        uint16_t udp_sport = (_qpn ^ params.remote_qpn ^ 0xC000) & 0xFFFF;
+        DEVX_SET(qpc, qpc, primary_address_path.udp_sport, udp_sport);
+        DEVX_SET(qpc, qpc, primary_address_path.dscp, params.dscp);
+    } else {
+        DEVX_SET(qpc, qpc, primary_address_path.grh, _ah_attr->is_global);
+        DEVX_SET(qpc, qpc, primary_address_path.rlid, _ah_attr->dlid);
+        DEVX_SET(qpc, qpc, primary_address_path.mlid, _ah_attr->src_path_bits & 0x7f);
+        DEVX_SET(qpc, qpc, primary_address_path.sl, params.sl);
+
+        if (_ah_attr->is_global) {
+            DEVX_SET(qpc, qpc, primary_address_path.src_addr_index, _ah_attr->grh.sgid_index);
+            DEVX_SET(qpc, qpc, primary_address_path.hop_limit, _ah_attr->grh.hop_limit);
+            memcpy(DEVX_ADDR_OF(qpc, qpc, primary_address_path.rgid_rip), &(_ah_attr->grh.dgid),
+                        sizeof(_ah_attr->grh.dgid));
+            DEVX_SET(qpc, qpc, primary_address_path.tclass, params.traffic_class);
+        }
+    }
 
     if (mlx5dv_devx_obj_modify(_qp, in, sizeof(in), out, sizeof(out))) {
         log_error("Failed to modify QP to RTR qpn: %d", _qpn);
+        log_error("Syndrome: 0x%x", DEVX_GET(init2rtr_qp_out, out, syndrome));
         return STATUS_ERR;
     }
+
+    log_debug("Modified QP to RTR qpn: %d", _qpn);
 
     return STATUS_OK;
 }
@@ -980,21 +1280,12 @@ queue_pair::create_ah(ibv_pd* pd, ibv_ah_attr* rattr)
     return STATUS_OK;
 }
 
-
 STATUS
 queue_pair::rtr_to_rts(qp_init_connection_params &params)
 {
     if (!_qp) {
         return STATUS_ERR;
     }
-
-    STATUS res = create_ah(params.pd, params.remote_ah_attr);
-    RETURN_IF_FAILED(res);
-
-    auto _ah_attr = params.remote_ah_attr;
-
-    mlx5_wqe_av mlx5_av = {};
-    objects_get_av(_ah ,&mlx5_av);
 
     uint32_t in[DEVX_ST_SZ_DW(rtr2rts_qp_in)] = {0};
     uint32_t out[DEVX_ST_SZ_DW(rtr2rts_qp_out)] = {0};
@@ -1003,49 +1294,20 @@ queue_pair::rtr_to_rts(qp_init_connection_params &params)
     DEVX_SET(rtr2rts_qp_in, in, qpn, _qpn);
 
     void* qpc = DEVX_ADDR_OF(rtr2rts_qp_in, in, qpc);
+    DEVX_SET(qpc, qpc, log_ack_req_freq, 0);
     DEVX_SET(qpc, qpc, retry_count, params.retry_count);
     DEVX_SET(qpc, qpc, rnr_retry, params.rnr_retry);
+    DEVX_SET(qpc, qpc, next_send_psn, 0);
 
-    if (_rdevice->get_port_attr(1)->link_layer == IBV_LINK_LAYER_ETHERNET) {
-        memcpy(DEVX_ADDR_OF(qpc, qpc, primary_address_path.rmac_47_32),
-                mlx5_av.rmac, sizeof(mlx5_av.rmac));
-        memcpy(DEVX_ADDR_OF(qpc, qpc, primary_address_path.rgid_rip),
-                mlx5_av.rgid, sizeof(mlx5_av.rgid));
-
-        DEVX_SET(qpc, qpc, primary_address_path.hop_limit, mlx5_av.hop_limit);
-        DEVX_SET(qpc, qpc, primary_address_path.src_addr_index, _ah_attr->grh.sgid_index);
-        DEVX_SET(qpc, qpc, primary_address_path.eth_prio, params.sl);
-        // For RoCE v2
-        DEVX_SET(qpc, qpc, primary_address_path.udp_sport, _ah_attr->dlid);
-        DEVX_SET(qpc, qpc, primary_address_path.dscp, params.dscp);
-    } else {
-        DEVX_SET(qpc, qpc, primary_address_path.grh, _ah_attr->is_global);
-        DEVX_SET(qpc, qpc, primary_address_path.rlid, _ah_attr->dlid);
-        DEVX_SET(qpc, qpc, primary_address_path.mlid, _ah_attr->src_path_bits & 0x7f);
-        DEVX_SET(qpc, qpc, primary_address_path.sl, params.sl);
-
-        if (_ah_attr->is_global) {
-            DEVX_SET(qpc, qpc, primary_address_path.src_addr_index, _ah_attr->grh.sgid_index);
-            DEVX_SET(qpc, qpc, primary_address_path.hop_limit, _ah_attr->grh.hop_limit);
-            memcpy(DEVX_ADDR_OF(qpc, qpc, primary_address_path.rgid_rip), &(_ah_attr->grh.dgid),
-                        sizeof(_ah_attr->grh.dgid));
-            DEVX_SET(qpc, qpc, primary_address_path.tclass, params.traffic_class);
-        }
-    }
-
-    DEVX_SET(qpc, qpc, primary_address_path.vhca_port_num, _ah_attr->port_num);
-    DEVX_SET(qpc, qpc, log_rra_max, ilog2(_rdevice->get_device_attr()->max_qp_rd_atom));
-    DEVX_SET(qpc, qpc, min_rnr_nak, params.min_rnr_to);
-
-        if (mlx5dv_devx_obj_modify(_qp, in, sizeof(in), out, sizeof(out))) {
+    if (mlx5dv_devx_obj_modify(_qp, in, sizeof(in), out, sizeof(out))) {
         log_error("Failed to modify QP to RTS qpn: %d", _qpn);
         return STATUS_ERR;
     }
 
+    log_debug("Modified QP to RTS qpn: %d", _qpn);
     return STATUS_OK;
 }
 
-#define RDMA_WQE_SEG_SIZE       64   // Size of a WQE segment (one basic block)
 #define RDMA_MAX_WQE_BB         4    // Maximum number of basic blocks per WQE
 #define MLX5_SEND_WQE_BB        64   // Basic block size for send WQEs
 #define MLX5_OPCODE_RDMA_WRITE  8    // RDMA Write opcode
@@ -1056,134 +1318,181 @@ queue_pair::rtr_to_rts(qp_init_connection_params &params)
 
 // Implementation of the post_send method in queue_pair class
 STATUS queue_pair::post_send(struct mlx5_wqe_ctrl_seg* ctrl, unsigned wqe_size) {
-    // Make sure control segment is aligned
     if ((uintptr_t)ctrl % RDMA_WQE_SEG_SIZE != 0) {
         log_error("WQE control segment not aligned to %d bytes", RDMA_WQE_SEG_SIZE);
         return STATUS_ERR;
     }
-    
-    // Calculate the number of basic blocks (BB) this WQE will consume
+
+    log_debug("Posting WQE at index %u, size %zu bytes", _sq_pi, wqe_size);
+
     uint16_t num_bb = (wqe_size + MLX5_SEND_WQE_BB - 1) / MLX5_SEND_WQE_BB;
-    
-    // Ensure we have enough space in the queue
-    uint16_t available = _sq_size - ((_sq_pi - _sq_ci) % _sq_size);
-    if (available < num_bb) {
-        log_error("Send queue full, not enough space for WQE");
-        return STATUS_ERR;
-    }
-    
-    // Calculate the DB value: new producer index after posting this WQE
-    uint16_t new_pi = (_sq_pi + num_bb) % _sq_size;
-    
-    // Ensure all WQE stores are visible before writing doorbell record
-    __sync_synchronize(); // Full memory barrier
-    
-    // Write control+data to the BlueFlame register using 64-bit writes
-    void* bf_reg = _uar->get()->reg_addr;
-    void* src = ctrl;
-    __be64* dst64 = (__be64*)bf_reg;
-    __be64* src64 = (__be64*)src;
-    for (size_t i = 0; i < (num_bb * MLX5_SEND_WQE_BB / sizeof(__be64)); ++i) {
-        dst64[i] = src64[i];
-    }
-    __atomic_thread_fence(__ATOMIC_SEQ_CST);
-    
-    // Write doorbell record - this is where HW reads the current queue position
-    volatile uint32_t* dbrec = (volatile uint32_t*)((char*)_umem_db->addr() + _sq_dbr_offset);
-    *dbrec = htobe32(new_pi & 0xFFFF);
-    __atomic_thread_fence(__ATOMIC_SEQ_CST);
-    
-    // Update the queue pointer
+    uint16_t new_pi = _sq_pi + num_bb;
+
+    void *bf_reg = static_cast<char*>(_uar->get()->reg_addr) + _bf_offset;
+
+
+    unsigned bytecnt   = wqe_size; 
+
+    void *queue_start  = _umem_sq->addr();
+    void *queue_end    = static_cast<char*>(queue_start) + _sq_size * RDMA_WQE_SEG_SIZE;
+
+    udma_to_device_barrier();
+    volatile uint32_t *dbrec = static_cast<volatile uint32_t*>(_umem_db->addr());
+    dbrec[MLX5_SND_DBR] = htobe32(new_pi & 0xffff); 
+    mmio_flush_writes();
+
+    //bf_copy(bf_reg, ctrl, bytecnt, queue_start, queue_end);
+    mmio_write64_be(bf_reg + _bf_offset, ctrl);
+   
+    _bf_offset ^= _bf_buf_size;
     _sq_pi = new_pi;
-    
+    log_debug("Updated SQ producer index to: %u", _sq_pi);
     return STATUS_OK;
 }
 
-// Implementation of the post_wqe helper method
+
 STATUS queue_pair::post_wqe(uint8_t opcode, void* laddr, uint32_t lkey,
-                          uint64_t raddr, uint32_t rkey, uint32_t length,
-                          uint32_t imm_data, uint32_t flags) {
+                            void* raddr, uint32_t rkey, uint32_t length,
+                            uint32_t imm_data, uint32_t flags) {
     // Calculate WQE size based on segments needed
-    size_t wqe_size = sizeof(mlx5_wqe_ctrl_seg);  // Control segment always present
-    
-    // Add data segments size
+    size_t wqe_size = sizeof(mlx5_wqe_ctrl_seg);
     wqe_size += sizeof(mlx5_wqe_data_seg);
-    
-    // Add remote address segment for RDMA operations
     bool need_raddr = (opcode == MLX5_OPCODE_RDMA_WRITE ||
                        opcode == MLX5_OPCODE_RDMA_WRITE_IMM ||
                        opcode == MLX5_OPCODE_RDMA_READ);
     if (need_raddr) {
         wqe_size += sizeof(mlx5_wqe_raddr_seg);
     }
-    
-    // Round up to nearest segment boundary
     wqe_size = (wqe_size + RDMA_WQE_SEG_SIZE - 1) & ~(RDMA_WQE_SEG_SIZE - 1);
-    
-    // Get pointer to the WQE in the send queue
-    mlx5_wqe_ctrl_seg* ctrl = (mlx5_wqe_ctrl_seg*)((char*)_umem_sq->addr() + (_sq_pi % _sq_size) * RDMA_WQE_SEG_SIZE);
-    
-    // Set up control segment
+
+    mlx5_wqe_ctrl_seg* ctrl = (mlx5_wqe_ctrl_seg*)((char*)_umem_sq->addr() +
+                              _sq_buf_offset + (_sq_pi % _sq_size) * RDMA_WQE_SEG_SIZE);
+    log_debug("Posting WQE at index %u, size %zu bytes", _sq_pi, wqe_size);
+    log_debug("WQE control segment at %p", ctrl);
+
     memset(ctrl, 0, wqe_size);
-    ctrl->opmod_idx_opcode = htobe32((_sq_pi & 0xffff) << 8 | opcode);
-    ctrl->qpn_ds = htobe32((_qpn & 0xFFFFFF) << 8 | (wqe_size / 16));
-    ctrl->fm_ce_se = (flags & 0x7); // FM, CE, SE flags
-    
-    // Initialize segment pointer for next segment
+
+    uint8_t num_data_seg = 1;
+    uint8_t ds = (need_raddr ? 2 : 1) + num_data_seg;
+    uint8_t fm_ce_se = MLX5_WQE_CTRL_CQ_UPDATE;
+    uint8_t signature = 0;
+    uint8_t opmod = 0;
+    uint32_t imm = 0;
+
+    log_debug("Post WQE with parameters:");
+    log_debug("  opcode: 0x%x", opcode);
+    log_debug("  laddr: %p", laddr);
+    log_debug("  lkey: 0x%x", lkey);
+    log_debug("  raddr: 0x%lx", raddr);
+    log_debug("  rkey: 0x%x", rkey);
+    log_debug("  length: %u", length);
+    log_debug("  flags: 0x%x", flags);
+    log_debug("  need_raddr: %s", need_raddr ? "true" : "false");
+    log_debug("  num_data_seg: %u", num_data_seg);
+
+
+    log_debug("Calling mlx5dv_set_ctrl_seg with:");
+    log_debug("  ctrl_addr: %p", ctrl);
+    log_debug("  wqe_index: %u", _sq_pi); // Assuming _sq_pi is the correct index here
+    log_debug("  opcode: 0x%x", opcode);
+    log_debug("  opmod: 0x%x", opmod);
+    log_debug("  qpn: 0x%x", _qpn);
+    log_debug("  fm_ce_se: 0x%x", fm_ce_se); // <<< Check this value! Should be 2
+    log_debug("  ds: %u", ds);
+    log_debug("  signature: 0x%x", signature);
+    log_debug("  imm: 0x%x", imm_data);
+
+    if (opcode == MLX5_OPCODE_SEND_IMM || opcode == MLX5_OPCODE_RDMA_WRITE_IMM) {
+        imm = htobe32(imm_data);
+    }
+    mlx5_set_ctrl_seg(ctrl, _sq_pi, opcode, opmod, _qpn, fm_ce_se, ds, signature, imm);
+
     void* segment = ctrl + 1;
-    
-    // Add remote address segment for RDMA operations
     if (need_raddr) {
         mlx5_wqe_raddr_seg* raddr_seg = (mlx5_wqe_raddr_seg*)segment;
-        raddr_seg->raddr = htobe64(raddr);
-        raddr_seg->rkey = htobe32(rkey);
-        segment = raddr_seg + 1;
+        mlx5_set_rdma_seg(raddr_seg, raddr, (uintptr_t)rkey);
+        segment = (void*)((char*)segment + sizeof(struct mlx5_wqe_raddr_seg));
     }
-    
-    // Add data segment
     mlx5_wqe_data_seg* data_seg = (mlx5_wqe_data_seg*)segment;
-    data_seg->byte_count = htobe32(length);
-    data_seg->lkey = htobe32(lkey);
-    data_seg->addr = htobe64((uint64_t)laddr);
-    
-    // For operations with immediate data
-    if (opcode == MLX5_OPCODE_SEND_IMM || opcode == MLX5_OPCODE_RDMA_WRITE_IMM) {
-        ctrl->imm = htobe32(imm_data);
-    }
-    
-    // Post the WQE to the hardware
+    mlx5_set_data_seg(data_seg, length, lkey, (uintptr_t)laddr);
+    dump_wqe((unsigned char*)ctrl);
+
     return post_send(ctrl, wqe_size);
 }
 
 // Implementations of the convenience methods
-STATUS queue_pair::post_rdma_write(void* laddr, uint32_t lkey, 
-                                uint64_t raddr, uint32_t rkey, 
-                                uint32_t length, uint32_t flags) {
+STATUS
+queue_pair::post_rdma_write(void* laddr, uint32_t lkey, 
+                            void* raddr, uint32_t rkey, 
+                            uint32_t length, uint32_t flags) {
     return post_wqe(MLX5_OPCODE_RDMA_WRITE, laddr, lkey, raddr, rkey, length, 0, flags);
 }
 
-STATUS queue_pair::post_rdma_read(void* laddr, uint32_t lkey, 
-                               uint64_t raddr, uint32_t rkey, 
-                               uint32_t length, uint32_t flags) {
+STATUS
+queue_pair::post_rdma_read(void* laddr, uint32_t lkey, 
+                           void* raddr, uint32_t rkey, 
+                           uint32_t length, uint32_t flags) {
     return post_wqe(MLX5_OPCODE_RDMA_READ, laddr, lkey, raddr, rkey, length, 0, flags);
 }
 
-STATUS queue_pair::post_send_msg(void* laddr, uint32_t lkey, 
-                              uint32_t length, uint32_t flags) {
+STATUS
+queue_pair::post_send_msg(void* laddr, uint32_t lkey, 
+                          uint32_t length, uint32_t flags) {
     return post_wqe(MLX5_OPCODE_SEND, laddr, lkey, 0, 0, length, 0, flags);
 }
 
-STATUS queue_pair::post_send_imm(void* laddr, uint32_t lkey, 
-                              uint32_t length, uint32_t imm_data, 
-                              uint32_t flags) {
+STATUS
+queue_pair::post_send_imm(void* laddr, uint32_t lkey, 
+                          uint32_t length, uint32_t imm_data, 
+                          uint32_t flags) {
     return post_wqe(MLX5_OPCODE_SEND_IMM, laddr, lkey, 0, 0, length, imm_data, flags);
 }
 
-STATUS queue_pair::post_rdma_write_imm(void* laddr, uint32_t lkey, 
-                                    uint64_t raddr, uint32_t rkey, 
-                                    uint32_t length, uint32_t imm_data, 
-                                    uint32_t flags) {
+STATUS
+queue_pair::post_rdma_write_imm(void* laddr, uint32_t lkey, 
+                                void* raddr, uint32_t rkey, 
+                                uint32_t length, uint32_t imm_data, 
+                                uint32_t flags) {
     return post_wqe(MLX5_OPCODE_RDMA_WRITE_IMM, laddr, lkey, raddr, rkey, length, imm_data, flags);
+}
+
+STATUS 
+queue_pair::query_qp_counters(uint32_t* hw_counter,
+                              uint32_t* sw_counter,
+                              uint32_t* wq_sig) {
+    if (!_qp) {
+        log_error("QP object not initialized");
+        return STATUS_ERR;
+    }
+
+    uint32_t out[DEVX_ST_SZ_DW(query_qp_out)] = {};
+    uint32_t in[DEVX_ST_SZ_DW(query_qp_in)] = {};
+    
+    DEVX_SET(query_qp_in, in, opcode, MLX5_CMD_OP_QUERY_QP);
+    DEVX_SET(query_qp_in, in, qpn, _qpn);
+
+    int ret = mlx5dv_devx_obj_query(_qp, in, sizeof(in), out, sizeof(out));
+    if (ret) {
+        log_error("Failed to query QP counters: %s", strerror(errno));
+        return STATUS_ERR;
+    }
+    
+    if (hw_counter) {
+        *hw_counter = DEVX_GET(query_qp_out, out, qpc.hw_sq_wqebb_counter);
+    }
+    
+    if (sw_counter) {
+        *sw_counter = DEVX_GET(query_qp_out, out, qpc.sw_sq_wqebb_counter);
+    }
+
+    if (wq_sig) {
+        *wq_sig = DEVX_GET(query_qp_out, out, qpc.wq_signature);
+    }
+
+    log_debug("QP MAX MSG: %d", DEVX_GET(query_qp_out, out, qpc.log_msg_max));
+    log_debug("QP access rae: %d", DEVX_GET(query_qp_out, out, qpc.rae));
+    
+    return STATUS_OK;
 }
 
 // Implement the empty post_recv method from the header
@@ -1200,5 +1509,37 @@ struct ibv_qp* queue_pair::get() const {
     // If using DEVX, you may need to cast or extract the ibv_qp* from your internal structure.
     // For now, return nullptr if not available.
     return nullptr; // TODO: return actual ibv_qp* if available
+}
+
+int queue_pair::get_qp_state() const {
+    if (!_qp || !_rdevice) return STATUS_ERR;
+
+    uint32_t in[DEVX_ST_SZ_DW(query_qp_in)] = {0};
+    uint32_t out[DEVX_ST_SZ_DW(query_qp_out)] = {0};
+
+    DEVX_SET(query_qp_in, in, opcode, MLX5_CMD_OP_QUERY_QP);
+    DEVX_SET(query_qp_in, in, qpn, _qpn);
+
+    if (mlx5dv_devx_obj_query(_qp, in, sizeof(in), out, sizeof(out))) {
+        log_error("Failed to query QP state for qpn: %d", _qpn);
+        return -1;
+    }
+
+    void* qpc = DEVX_ADDR_OF(query_qp_out, out, qpc);
+    int state = DEVX_GET(qpc, qpc, state);
+    return state;
+}
+
+const char* queue_pair::qp_state_to_str(int state) {
+    switch (state) {
+        case 0: return "RESET";
+        case 1: return "INIT";
+        case 2: return "RTR";
+        case 3: return "RTS";
+        case 4: return "SQD";
+        case 5: return "SQE";
+        case 6: return "ERR";
+        default: return "UNKNOWN";
+    }
 }
 
