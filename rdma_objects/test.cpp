@@ -335,10 +335,8 @@ int main ()
     
     // Add memory fence to ensure all previous stores are visible
     __sync_synchronize();
-    
-    // Verify the WQE was written to the buffer
-    log_debug("Verifying WQE buffer at %p:", umem_sq->addr() + p_qp->get_sq_buf_offset());
     unsigned char* wqe_buf = (unsigned char*)umem_sq->addr() + p_qp->get_sq_buf_offset();
+    log_debug("Verifying WQE buffer at %p:", wqe_buf);
     dump_wqe(wqe_buf);
     
     // Verify doorbell area 
@@ -374,9 +372,7 @@ int main ()
         num_tries++;
     } while (num_tries < 5);
 
-    // Query and log QP state after posting RDMA write
     int qp_state_after = p_qp->get_qp_state();
-
     log_debug("QP state after post_rdma_write: %s (%d)", queue_pair::qp_state_to_str(qp_state_after), qp_state_after);
 
     if (FAILED(res)) {
@@ -385,10 +381,7 @@ int main ()
     }
 
     log_debug("Dest buffer contents: %s", static_cast<char*>(mr_receiver->get_addr()));
-    
     log_debug("RDMA write request posted successfully");
-    
-    // Arm the CQ fence to ensure all previous stores are visible
     log_debug("Arming the completion queue");
     res = cq_devx->arm_cq(0);
     RETURN_IF_FAILED(res);

@@ -5,6 +5,7 @@
 #include <cstring>
 #include <syslog.h>
 #include <arpa/inet.h>
+#include <infiniband/mlx5dv.h>
 
 #ifdef __linux__
 #include <unistd.h>
@@ -226,6 +227,8 @@ static unsigned tlx_ffs64(uint64_t n)
 
 /* The i-th bit */
 #define TLX_BIT_GET(_value, _i)  (!!((_value) & TLX_BIT(_i)))
+
+#define unlikely(x)      __builtin_expect(!!(x), 0)
 
 //==============================================================================
 // template memory allocation

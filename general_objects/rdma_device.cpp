@@ -116,7 +116,7 @@ queue_pair* rdma_general_device::create_queue_pair(
         creation_params.pdn = pd->get_pdn();
         
         // Create default completion queue if needed
-        completion_queue* cq = get_completion_queue("default");
+        completion_queue_devx* cq = get_completion_queue("default");
         if (!cq) {
             cq = create_completion_queue("default");
             if (!cq) {
@@ -149,7 +149,7 @@ queue_pair* rdma_general_device::create_queue_pair(
     return _queue_pairs[qp_name].get();
 }
 
-completion_queue* rdma_general_device::create_completion_queue(
+completion_queue_devx* rdma_general_device::create_completion_queue(
     const std::string& cq_name,
     const cq_creation_params* params
 ) {
@@ -160,58 +160,18 @@ completion_queue* rdma_general_device::create_completion_queue(
     }
     
     // Create completion queue (auto_ref constructor creates the object)
-    auto_ref<completion_queue> cq;
-    
-    // If params are provided, use them; otherwise create default params
-    cq_creation_params creation_params;
+    auto_ref<completion_queue_devx> cq;
+
+    // Build hardware params (use defaults or params if provided)
+    cq_hw_params hw_params;
     if (params) {
-        creation_params = *params;
-    } else {
-        // Set default values
-        creation_params.context = _rdma_device->get_context();
-        
-        // Create default CQ attribute structures
-        ibv_cq_init_attr_ex* cq_attr_ex = aligned_alloc<ibv_cq_init_attr_ex>(1);
-        mlx5dv_cq_init_attr* dv_cq_attr = aligned_alloc<mlx5dv_cq_init_attr>(1);
-        
-        if (!cq_attr_ex || !dv_cq_attr) {
-            log_error("Failed to allocate memory for CQ attributes");
-            if (cq_attr_ex) free(cq_attr_ex);
-            if (dv_cq_attr) free(dv_cq_attr);
-            return nullptr;
-        }
-        
-        memset(cq_attr_ex, 0, sizeof(ibv_cq_init_attr_ex));
-        memset(dv_cq_attr, 0, sizeof(mlx5dv_cq_init_attr));
-        
-        // Default CQ size and attributes
-        cq_attr_ex->cqe = 1024;
-        cq_attr_ex->channel = nullptr;
-        cq_attr_ex->comp_vector = 0;
-        cq_attr_ex->wc_flags = IBV_WC_EX_WITH_BYTE_LEN;
-        cq_attr_ex->comp_mask = IBV_CQ_INIT_ATTR_MASK_FLAGS;
-        cq_attr_ex->flags = 0;
-        
-        dv_cq_attr->comp_mask = MLX5DV_CQ_INIT_ATTR_MASK_COMPRESSED_CQE;
-        // MLX5 specific CQ attributes
-        // Note: cqe_comp_en may not be defined in older versions of the library
-        
-        creation_params.cq_attr_ex = cq_attr_ex;
-        creation_params.dv_cq_attr = dv_cq_attr;
+        // You may want to map fields from params to hw_params here if needed
+        // For now, use defaults
     }
-    
+    // Optionally set hw_params fields here
+
     // Initialize the completion queue
-    STATUS status = cq->initialize(creation_params);
-    
-    // Free allocated memory for default parameters
-    if (!params) {
-        if (creation_params.cq_attr_ex) {
-            free(creation_params.cq_attr_ex);
-        }
-        if (creation_params.dv_cq_attr) {
-            free(creation_params.dv_cq_attr);
-        }
-    }
+    STATUS status = cq->initialize(_rdma_device.get(), hw_params);
     
     if (FAILED(status)) {
         log_error("Failed to initialize completion queue '%s'", cq_name.c_str());
@@ -230,7 +190,7 @@ queue_pair* rdma_general_device::get_queue_pair(const std::string& qp_name) {
     return nullptr;
 }
 
-completion_queue* rdma_general_device::get_completion_queue(const std::string& cq_name) {
+completion_queue_devx* rdma_general_device::get_completion_queue(const std::string& cq_name) {
     auto it = _completion_queues.find(cq_name);
     if (it != _completion_queues.end()) {
         return it->second.get();
@@ -246,8 +206,8 @@ std::vector<queue_pair*> rdma_general_device::get_all_queue_pairs() {
     return qps;
 }
 
-std::vector<completion_queue*> rdma_general_device::get_all_completion_queues() {
-    std::vector<completion_queue*> cqs;
+std::vector<completion_queue_devx*> rdma_general_device::get_all_completion_queues() {
+    std::vector<completion_queue_devx*> cqs;
     for (auto& pair : _completion_queues) {
         cqs.push_back(pair.second.get());
     }
@@ -319,7 +279,7 @@ memory_region* rdma_general_device::create_memory_region(
     
     // Create memory region (auto_ref constructor creates the object)
     auto_ref<memory_region> mr;
-    STATUS status = mr->initialize(_rdma_device.get(), qp, pd, addr, length);
+    STATUS status = mr->initialize(_rdma_device.get(), qp, pd, length);
     
     if (FAILED(status)) {
         log_error("Failed to initialize memory region '%s'", mr_name.c_str());

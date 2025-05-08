@@ -82,7 +82,7 @@ int main() {
         qp_params.max_dest_rd_atomic = 16;
         
         // Create a completion queue
-        completion_queue* cq = device->create_completion_queue("test_cq");
+        completion_queue_devx* cq = device->create_completion_queue("test_cq");
         if (!cq) {
             std::cerr << "Failed to create CQ on device " << device_name << std::endl;
             continue;

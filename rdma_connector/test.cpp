@@ -94,8 +94,9 @@ void client_thread(int client_id, const std::string& server_ip, uint16_t server_
         .dv_cq_attr = &dv_cq_attr
     };
 
-    auto_ref<completion_queue> cq;
-    res = cq->initialize(cq_params);
+    auto_ref<completion_queue_devx> cq;
+    cq_hw_params hw_params;
+    res = cq->initialize(device.get(), hw_params);
     if (FAILED(res)) {
         std::cerr << client_name << ": Failed to initialize completion queue" << std::endl;
         return;
@@ -190,7 +191,7 @@ void client_thread(int client_id, const std::string& server_ip, uint16_t server_
 
     // Register memory region
     auto_ref<memory_region> mr;
-    res = mr->initialize(device, qp, pd, buf, 4096);
+    res = mr->initialize(device, qp, pd, 4096);
     if (FAILED(res)) {
         std::cerr << client_name << ": Failed to register memory region" << std::endl;
         free(buf);
@@ -215,20 +216,19 @@ void client_thread(int client_id, const std::string& server_ip, uint16_t server_
     std::cout << client_name << ": Remote buffer address: 0x" << std::hex << raddr << ", rkey: 0x" << rkey << std::dec << std::endl << std::flush;
     uint64_t wr_id = 0x12345678 + client_id;
     res = qp->post_write(
-        msg,                 /* local src address      */
-        mr->get_lkey(),      /* local key              */
-        raddr,               /* remote dst address     */
-        rkey,                /* remote key             */
-        sizeof(message_t),   /* length                 */
-        IBV_SEND_SIGNALED    /* flags                  */
-        // wr_id is not used in your API, but should be set if possible
+        msg,
+        mr->get_lkey(),
+        (void*)raddr,
+        rkey,
+        sizeof(message_t),
+        IBV_SEND_SIGNALED
     );
     if (FAILED(res)) {
         std::cerr << client_name << ": Failed to post RDMA write, res=" << res << std::endl;
     } else {
         std::cout << client_name << ": RDMA write posted successfully" << std::endl;
         // Retry loop for CQ polling
-        int max_poll = 10000;
+        int max_poll = 10;
         bool cqe_found = false;
         for (int poll_attempt = 0; poll_attempt < max_poll; ++poll_attempt) {
             res = cq->poll_cq();
@@ -348,8 +348,9 @@ int main(int argc, char** argv) {
                   .dv_cq_attr  = &dv_cq_attr
               };
 
-              auto_ref<completion_queue> cq;
-              rc = cq->initialize(cq_params);
+              auto_ref<completion_queue_devx> cq;
+              cq_hw_params hw_params;
+              rc = cq->initialize(device.get(), hw_params);
               if (FAILED(rc)) {
                   std::cerr << "Server: Failed to init CQ for ID " << id << '\n';
                   server.close_connection(id);
@@ -402,7 +403,7 @@ int main(int argc, char** argv) {
               memset(recv_buf, 0, 4096);
 
               auto_ref<memory_region> mr_recv;
-              rc = mr_recv->initialize(device, qp, pd, recv_buf, 4096);
+              rc = mr_recv->initialize(device, qp, pd, 4096);
               if (FAILED(rc)) {
                   std::cerr << "Server: Failed to register recv MR for ID " << id << '\n';
                   server.close_connection(id);

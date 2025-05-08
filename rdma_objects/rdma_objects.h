@@ -408,6 +408,11 @@ public:
 
 private:
 
+
+    STATUS post_wqe(uint8_t opcode, void* laddr, uint32_t lkey,
+                    void* raddr, uint32_t rkey, uint32_t length,
+                    uint32_t imm_data = 0, uint32_t flags = 0);
+
     mlx5dv_devx_obj* _qp;
     uint32_t _qpn;
 
@@ -419,20 +424,17 @@ private:
 
     // Address handle for remote communication
     ibv_ah* _ah;
-
-    STATUS post_wqe(uint8_t opcode, void* laddr, uint32_t lkey,
-                    void* raddr, uint32_t rkey, uint32_t length,
-                    uint32_t imm_data = 0, uint32_t flags = 0);
     
-    uint16_t _sq_pi = 0;             // SQ producer index
-    uint16_t _sq_ci = 0;             // SQ consumer index
-    uint16_t _sq_size = 0;           // SQ size in WQEs
+    uint16_t _sq_pi = 0;       // SQ producer index
+    uint16_t _sq_ci = 0;       // SQ consumer index
+    uint16_t _sq_size = 0;     // SQ size in WQEs
     uint32_t _sq_dbr_offset;   // Offset to SQ doorbell record
-    uint32_t _sq_buf_offset;     // Offset in send queue buffer
+    uint32_t _sq_buf_offset;   // Offset in send queue buffer
 
     // BlueFlame buffer tracking for doorbell
-    uint32_t _bf_offset = 0;         // Current BlueFlame doorbell offset
+    uint32_t _bf_offset   = 0;       // Current BlueFlame doorbell offset
     uint32_t _bf_buf_size = 0;       // BlueFlame buffer size in bytes (initialized after qp setup)
+    bool     _use_bf      = false;
 };
 
 //==============================================================================

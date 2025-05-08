@@ -82,7 +82,7 @@ public:
      * @param params Completion queue creation parameters
      * @return Pointer to the completion queue or nullptr on failure
      */
-    completion_queue* create_completion_queue(
+    completion_queue_devx* create_completion_queue(
         const std::string& cq_name,
         const cq_creation_params* params = nullptr
     );
@@ -149,7 +149,7 @@ public:
      * @param cq_name Name of the completion queue
      * @return Pointer to the completion queue or nullptr if not found
      */
-    completion_queue* get_completion_queue(const std::string& cq_name);
+    completion_queue_devx* get_completion_queue(const std::string& cq_name);
     
     /**
      * @brief Get memory region by name
@@ -189,7 +189,7 @@ public:
      * @brief Get all completion queues
      * @return Vector of completion queue pointers
      */
-    std::vector<completion_queue*> get_all_completion_queues();
+    std::vector<completion_queue_devx*> get_all_completion_queues();
     
     /**
      * @brief Get all memory regions
@@ -228,7 +228,7 @@ private:
     // Resource management
     std::map<std::string, auto_ref<protection_domain>> _protection_domains;
     std::map<std::string, auto_ref<queue_pair>> _queue_pairs;
-    std::map<std::string, auto_ref<completion_queue>> _completion_queues;
+    std::map<std::string, auto_ref<completion_queue_devx>> _completion_queues;
     std::map<std::string, auto_ref<memory_region>> _memory_regions;
     std::map<std::string, auto_ref<user_memory>> _user_memories;
     std::map<std::string, auto_ref<memory_key>> _memory_keys;

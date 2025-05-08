@@ -856,7 +856,6 @@ completion_queue_devx::initialize_cq_resources(
     }
 
     log_debug("CQE buffer initialized with op_own and correct owner bits");
-
     return STATUS_OK;
 }
 
@@ -932,8 +931,8 @@ completion_queue_devx::poll_cq() {
     uint8_t se = mlx5dv_get_cqe_se((struct mlx5_cqe64*)cqe);
     uint8_t format = mlx5dv_get_cqe_format((struct mlx5_cqe64*)cqe);
 
-    //log_debug("[DEVX CQ poll] ci=%u owner=%u expected_owner=%u opcode=0x%x se=%u format=%u wqe_counter=%u byte_cnt=%u",
-    //          ci, owner, expected_owner, opcode, se, format, cqe->wqe_counter, cqe->byte_cnt);
+    log_debug("[DEVX CQ poll] ci=%u owner=%u expected_owner=%u opcode=0x%x se=%u format=%u wqe_counter=%u byte_cnt=%u",
+              ci, owner, expected_owner, opcode, se, format, cqe->wqe_counter, cqe->byte_cnt);
 
     if (owner == expected_owner && (opcode != 0x0)) {
         const volatile struct mlx5_err_cqe* err_cqe = (const volatile struct mlx5_err_cqe*)cqe;
@@ -1019,7 +1018,6 @@ completion_queue_devx::destroy() {
 // Queue Pair Implementation
 //============================================================================
 
-
 queue_pair::queue_pair() :
     _qp(nullptr),
     _qpn(0),
@@ -1034,7 +1032,8 @@ queue_pair::queue_pair() :
     _sq_dbr_offset(0),
     _sq_buf_offset(0),
     _bf_buf_size(0),
-    _bf_offset(0)
+    _bf_offset(0),
+    _use_bf(false)
 {}
 
 queue_pair::~queue_pair() {
@@ -1175,7 +1174,6 @@ queue_pair::reset_to_init(qp_init_connection_params& params) {
     DEVX_SET(rst2init_qp_in, in, qpn, _qpn);
 
     void* qpc = DEVX_ADDR_OF(rst2init_qp_in, in, qpc);
-
     DEVX_SET(qpc, qpc, rae, 1);
     DEVX_SET(qpc, qpc, rwe, 1);
     DEVX_SET(qpc, qpc, rre, 1);
@@ -1236,9 +1234,6 @@ queue_pair::init_to_rtr(qp_init_connection_params &params)
         DEVX_SET(qpc, qpc, primary_address_path.hop_limit, mlx5_av.hop_limit);
         DEVX_SET(qpc, qpc, primary_address_path.src_addr_index, _ah_attr->grh.sgid_index);
         DEVX_SET(qpc, qpc, primary_address_path.eth_prio, params.sl);
-        // Use recommended RoCE v2 UDP source port calculation
-        uint16_t udp_sport = (_qpn ^ params.remote_qpn ^ 0xC000) & 0xFFFF;
-        DEVX_SET(qpc, qpc, primary_address_path.udp_sport, udp_sport);
         DEVX_SET(qpc, qpc, primary_address_path.dscp, params.dscp);
     } else {
         DEVX_SET(qpc, qpc, primary_address_path.grh, _ah_attr->is_global);
@@ -1330,9 +1325,7 @@ STATUS queue_pair::post_send(struct mlx5_wqe_ctrl_seg* ctrl, unsigned wqe_size) 
 
     void *bf_reg = static_cast<char*>(_uar->get()->reg_addr) + _bf_offset;
 
-
     unsigned bytecnt   = wqe_size; 
-
     void *queue_start  = _umem_sq->addr();
     void *queue_end    = static_cast<char*>(queue_start) + _sq_size * RDMA_WQE_SEG_SIZE;
 
@@ -1341,8 +1334,8 @@ STATUS queue_pair::post_send(struct mlx5_wqe_ctrl_seg* ctrl, unsigned wqe_size) 
     dbrec[MLX5_SND_DBR] = htobe32(new_pi & 0xffff); 
     mmio_flush_writes();
 
-    //bf_copy(bf_reg, ctrl, bytecnt, queue_start, queue_end);
-    mmio_write64_be(bf_reg + _bf_offset, ctrl);
+    if (unlikely(_use_bf)) bf_copy(bf_reg, ctrl, bytecnt, queue_start, queue_end);
+    mmio_write64_be(bf_reg, ctrl);
    
     _bf_offset ^= _bf_buf_size;
     _sq_pi = new_pi;
