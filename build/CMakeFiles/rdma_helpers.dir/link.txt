@@ -1,0 +1,1 @@
+/usr/bin/c++ -fPIC -shared -Wl,-soname,librdma_helpers.so -o librdma_helpers.so CMakeFiles/rdma_helpers.dir/qp_debug_lib.cpp.o  rdma_objects/librdma_objects.a rdma_connector/librdma_connector.a rdma_objects/librdma_objects.a -libverbs -lrdmacm -lmlx5 

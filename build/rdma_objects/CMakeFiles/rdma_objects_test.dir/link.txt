@@ -1,0 +1,1 @@
+/usr/bin/c++ CMakeFiles/rdma_objects_test.dir/test.cpp.o -o rdma_objects_test  librdma_objects.a -libverbs -lrdmacm -lmlx5 
