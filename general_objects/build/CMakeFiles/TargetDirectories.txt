@@ -1,4 +1,0 @@
-/mtxswgwork/armeng/workspace/armen_dev/EasyRdma/rdma_helpers/general_objects/build/CMakeFiles/rdma_general_objects.dir
-/mtxswgwork/armeng/workspace/armen_dev/EasyRdma/rdma_helpers/general_objects/build/CMakeFiles/general_objects_test.dir
-/mtxswgwork/armeng/workspace/armen_dev/EasyRdma/rdma_helpers/general_objects/build/CMakeFiles/edit_cache.dir
-/mtxswgwork/armeng/workspace/armen_dev/EasyRdma/rdma_helpers/general_objects/build/CMakeFiles/rebuild_cache.dir

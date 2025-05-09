@@ -1,2 +1,0 @@
-/usr/bin/ar qc librdma_connector.a CMakeFiles/rdma_connector.dir/connector.cpp.o CMakeFiles/rdma_connector.dir/connection.cpp.o
-/usr/bin/ranlib librdma_connector.a

@@ -53,3 +53,12 @@ target_link_libraries(rdma_connector_test
     ${RDMACM_LIBRARIES}
     ${MLX5_LIBRARIES}
 )
+
+# Debug level
+option(ENABLE_DEBUG "Enable debug logs" ON)
+
+if(ENABLE_DEBUG)
+    add_definitions(-DLOG_LEVEL=LOG_LEVEL_DEBUG)
+else()
+    add_definitions(-DLOG_LEVEL=LOG_LEVEL_ERROR)
+endif()

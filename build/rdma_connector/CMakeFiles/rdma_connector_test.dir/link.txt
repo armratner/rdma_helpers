@@ -1,1 +1,0 @@
-/usr/bin/c++ CMakeFiles/rdma_connector_test.dir/test.cpp.o -o rdma_connector_test   -L/mnt/armen/rdma_helpers/rdma_connector/../rdma_objects/build  -Wl,-rpath,/mnt/armen/rdma_helpers/rdma_connector/../rdma_objects/build librdma_connector.a ../rdma_objects/librdma_objects.a -lpthread -libverbs -lrdmacm -lmlx5 

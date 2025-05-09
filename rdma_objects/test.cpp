@@ -144,7 +144,6 @@ int main ()
     }
 
     qp_init_connection_params qp_init_conn_params {};
-
     qp_init_conn_params.pd = pd->get();
     qp_init_conn_params.mtu = IBV_MTU_1024;
     qp_init_conn_params.ece = 0;
@@ -172,6 +171,7 @@ int main ()
     qp_init_conn_params.remote_ah_attr->src_path_bits = port_lid;
     qp_init_conn_params.remote_ah_attr->port_num = 1;
     qp_init_conn_params.remote_qpn = p_qp1->get_qpn();
+    qp_init_conn_params.udp_sport = 50000;
 
     // Setup destination GID using the provided GID for loopback (11.11.0.2)
     memset(&qp_init_conn_params.remote_ah_attr->grh.dgid, 0, sizeof(ibv_gid));
@@ -183,14 +183,6 @@ int main ()
         return STATUS_ERR;
     }
     // Set for IPv4-mapped IPv6 address 0000:0000:0000:0000:0000:ffff:0b0b:0002
-    /*
-    qp_init_conn_params.remote_ah_attr->grh.dgid.raw[10] = 0xff;
-    qp_init_conn_params.remote_ah_attr->grh.dgid.raw[11] = 0xff;
-    qp_init_conn_params.remote_ah_attr->grh.dgid.raw[12] = 0x0b;
-    qp_init_conn_params.remote_ah_attr->grh.dgid.raw[13] = 0x0b;
-    qp_init_conn_params.remote_ah_attr->grh.dgid.raw[14] = 0x00;
-    qp_init_conn_params.remote_ah_attr->grh.dgid.raw[15] = 0x02;
-    */
 
     // Set additional GRH fields
     qp_init_conn_params.remote_ah_attr->grh.traffic_class = 0;
@@ -198,11 +190,11 @@ int main ()
     qp_init_conn_params.remote_ah_attr->grh.hop_limit = 2;
 
     qp_init_connection_params qp_init_conn_params1 {};
-
     qp_init_conn_params1.pd = pd->get();
     qp_init_conn_params1.mtu = IBV_MTU_1024;
     qp_init_conn_params1.ece = 0;
     qp_init_conn_params1.port_num = 1;
+    qp_init_conn_params1.udp_sport = 50000;
 
     // Fill in remote_ah_attr with test values
     qp_init_conn_params1.remote_ah_attr = aligned_alloc<ibv_ah_attr>(sizeof(ibv_ah_attr));
@@ -235,16 +227,6 @@ int main ()
     log_debug("GID: %s", gid_str);
 
     // Setup destination GID using the provided GID for loopback (11.11.0.2)
-
-    // Set for IPv4-mapped IPv6 address 0000:0000:0000:0000:0000:ffff:0b0b:0002
-    /*
-    qp_init_conn_params1.remote_ah_attr->grh.dgid.raw[10] = 0xff;
-    qp_init_conn_params1.remote_ah_attr->grh.dgid.raw[11] = 0xff;
-    qp_init_conn_params1.remote_ah_attr->grh.dgid.raw[12] = 0x0b;
-    qp_init_conn_params1.remote_ah_attr->grh.dgid.raw[13] = 0x0b;
-    qp_init_conn_params1.remote_ah_attr->grh.dgid.raw[14] = 0x00;
-    qp_init_conn_params1.remote_ah_attr->grh.dgid.raw[15] = 0x02;
-    */
 
     // Set additional GRH fields
     qp_init_conn_params1.remote_ah_attr->grh.traffic_class = 0;

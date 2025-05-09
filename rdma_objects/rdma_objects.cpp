@@ -112,6 +112,7 @@ rdma_device::query_hca_capabilities() {
     _hca_cap.log_max_xrq                  = DEVX_GET(cmd_hca_cap, hca_cap, log_max_xrq);
     _hca_cap.native_port_num              = DEVX_GET(cmd_hca_cap, hca_cap, native_port_num);
     _hca_cap.num_ports                    = DEVX_GET(cmd_hca_cap, hca_cap, num_ports);
+    _hca_cap.max_wqe_sz_sq                = DEVX_GET(cmd_hca_cap, hca_cap, max_wqe_sz_sq);
 
     log_debug("HCA Capabilities successfully queried, log_max_qp_sz: %u", _hca_cap.log_max_qp_sz);
     log_debug("HCA log_max_cq_sz: %u, log_max_cq: %u", _hca_cap.log_max_cq_sz, _hca_cap.log_max_cq);
@@ -687,34 +688,12 @@ memory_region::initialize(
     // Extract the created mkey
     uint32_t mkey_index = DEVX_GET(create_mkey_out, mkey_out, mkey_index);
     
-    // For ConnectX-4/5/6, the low 8 bits should be 0xef for user-space keys
     _lkey = (mkey_index << 8) | 0xef;
     _rkey = _lkey;
-
-
+    _mr_id = mkey_index;
 
     log_debug("Successfully created DEVX memory region");
     log_debug("MKey: 0x%x (index: 0x%x)", _lkey, mkey_index);
-
-    /*
-    struct ibv_mr* mr = ibv_reg_mr(pd->get(), _addr, _length,
-                               IBV_ACCESS_LOCAL_WRITE |
-                               IBV_ACCESS_REMOTE_WRITE |
-                               IBV_ACCESS_REMOTE_READ);
-    if (!mr) {
-        log_error("Failed to register memory region using ibv_reg_mr: %s", strerror(errno));
-        if (_umem) { destroy_user_memory(); _umem = nullptr; }
-        return STATUS_ERR;
-    }
-    _lkey = mr->lkey;
-    _rkey = mr->rkey;
-
-    // Store the ibv_mr handle if needed for deregistration later
-    // _ibv_mr_handle = mr; // Add a member to store this if needed for destroy()
-
-    log_debug("Successfully registered memory region using ibv_reg_mr");
-    log_debug("MR Keys: lkey=0x%x, rkey=0x%x", _lkey, _rkey);
-    */
 
     return STATUS_OK;
 }
@@ -884,7 +863,10 @@ completion_queue_devx::initialize(
     DEVX_SET(cqc, cq_context, uar_page, _uar->get()->page_id);
     DEVX_SET(cqc, cq_context, log_cq_size, cq_hw_params_list.log_cq_size);
 
-    DEVX_SET(cqc, cq_context, cqe_sz, 0);
+    DEVX_SET(cqc, cq_context, cqe_sz, cq_hw_params_list.cqe_sz);
+    DEVX_SET(cqc, cq_context, cqe_comp_en, cq_hw_params_list.cqe_comp_en);
+    DEVX_SET(cqc, cq_context, cq_period_mode, cq_hw_params_list.cq_period_mode);
+    DEVX_SET(cqc, cq_context, cq_period, cq_hw_params_list.cq_period);
     
     DEVX_SET(cqc, cq_context, dbr_umem_valid, 1);
     DEVX_SET(cqc, cq_context, dbr_umem_id, _umem_db->get()->umem_id);
@@ -1066,26 +1048,11 @@ queue_pair::get_qpn() const {
     return _qpn;
 }
 
-#define MLX5_RQ_STRIDE          2
-#define RDMA_WQE_SEG_SIZE       64   // Size of a WQE segment (one basic block)
-
 STATUS
 queue_pair::initialize(qp_init_creation_params& params) {
     if (_qp) {
         return STATUS_OK;
     }
-
-    // uint8_t* sq_base = static_cast<uint8_t*>(params.umem_sq->addr());
-
-    // for (size_t i = 0; i < 2048 / 64; ++i) {
-    //      uint32_t* dst = reinterpret_cast<uint32_t*>(sq_base + (i * 64));
-
-    //      dst[0] = 0xBEEF0000ULL | i;
-
-    //      for (int q = 1; q < 8; ++q) {
-    //          dst[q] = 0xDEADBEEFDEADBEEFULL;
-    //     }
-    // }
 
     if (params.rdevice) {
         _rdevice = params.rdevice;
@@ -1125,10 +1092,9 @@ queue_pair::initialize(qp_init_creation_params& params) {
     DEVX_SET(create_qp_in, in, wq_umem_valid, 1);
 
     DEVX_SET(qpc, qpc, log_page_size, get_page_size_log());
-
     DEVX_SET(qpc, qpc, page_offset, 0);
-
     DEVX_SET(qpc, qpc, log_rra_max, params.max_rd_atomic);
+    DEVX_SET(qpc, qpc, ts_format, MLX5_CQE_TIMESTAMP_FORMAT_DEFAULT);
 
     _qp = mlx5dv_devx_obj_create(params.context, in, sizeof(in), out, sizeof(out));
     if (!_qp) {
@@ -1235,6 +1201,7 @@ queue_pair::init_to_rtr(qp_init_connection_params &params)
         DEVX_SET(qpc, qpc, primary_address_path.src_addr_index, _ah_attr->grh.sgid_index);
         DEVX_SET(qpc, qpc, primary_address_path.eth_prio, params.sl);
         DEVX_SET(qpc, qpc, primary_address_path.dscp, params.dscp);
+        DEVX_SET(qpc, qpc, primary_address_path.udp_sport, params.udp_sport);
     } else {
         DEVX_SET(qpc, qpc, primary_address_path.grh, _ah_attr->is_global);
         DEVX_SET(qpc, qpc, primary_address_path.rlid, _ah_attr->dlid);

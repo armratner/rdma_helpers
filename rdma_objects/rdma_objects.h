@@ -8,11 +8,16 @@
 #include <chrono>
 #include <vector>
 #include <map>
+#include <cstddef>
+#include <cstdint>
 
 #include "mlx5_ifc.h"
 #include "../common/rdma_common.h"
 #include "../common/auto_ref.h"
 
+
+#define MLX5_RQ_STRIDE          2
+#define RDMA_WQE_SEG_SIZE       64
 
 inline void dump_wqe(unsigned char* wqe_buf) {
     for (int i = 0; i < 64; i += 16) {
@@ -46,6 +51,7 @@ struct hca_capabilities {
     uint8_t log_max_ra_res_qp;
     uint8_t log_max_msg;
     uint8_t max_tc;
+    uint8_t max_wqe_sz_sq;
     uint8_t log_max_mcg;
     uint8_t log_max_pd;
     uint8_t log_max_xrcd;
@@ -233,15 +239,26 @@ struct cq_creation_params {
     mlx5dv_cq_init_attr *dv_cq_attr;
 };
 
+/*
+0x0: FREE_RUNNING_TS
+0x1: REAL_TIME_TS
+0x2: FREE_RUNNING_AND_REAL_TIME_TS - both free
+*/
+
+enum CQE_TIMESTAMP_FORMAT {
+    MLX5_CQE_TIMESTAMP_FORMAT_DEFAULT = 0,
+    MLX5_CQE_TIMESTAMP_FORMAT_REAL_TIME = 1,
+    MLX5_CQE_TIMESTAMP_FORMAT_FREE_RUNNING = 2
+};
+
 struct cq_hw_params
 {
     uint8_t  log_cq_size              = 9;
-    uint8_t  log_page_size            = 12; // Added for CQ page size
+    uint8_t  log_page_size            = get_page_size_log(); // Added for CQ page size
     uint8_t  cqe_sz                   = 1;
     bool     cqe_comp_en              = false;
     uint8_t  cqe_comp_layout          = 0;
     uint8_t  mini_cqe_res_format      = 0;
-    uint8_t  cq_timestamp_format      = 0;
     /* ---- Moderation -------------------------------------------------- */
     uint8_t  cq_period_mode           = 0;
     uint16_t cq_period                = 0;
@@ -291,6 +308,10 @@ class completion_queue_devx : public base_object {
 // Queue Pair
 //==============================================================================
 
+struct mlx5_wqe_inline_seg {
+	__be32		byte_count;
+};
+
 struct qp_init_creation_params {
     rdma_device* rdevice;
     ibv_context* context;
@@ -323,6 +344,7 @@ struct qp_init_connection_params {
     uint8_t      traffic_class;
     uint32_t     remote_qpn;
     ibv_ah_attr* remote_ah_attr;
+    uint32_t     udp_sport;
     ibv_pd*      pd;
 
 };
@@ -437,9 +459,84 @@ private:
     bool     _use_bf      = false;
 };
 
+
+/* Return both the SQ offset (bytes) and total UMEM size (bytes) */
+struct qp_umem_layout {
+    size_t sq_offset_bytes;  /* 64-byte aligned start of SQ          */
+    size_t total_bytes;      /* RQ area + padding + SQ area          */
+};
+
+static inline qp_umem_layout
+calc_qp_umem_layout(uint32_t rq_wr,
+                    uint32_t log_rq_stride,
+                    uint32_t sq_wr,
+                    uint32_t max_sge,
+                    uint32_t max_inline)
+{
+    /* --- 1. RQ area --------------------------------------------------- */
+    const size_t rq_stride_bytes = 16u << log_rq_stride;   // PRM
+    size_t rq_bytes = static_cast<size_t>(rq_wr) * rq_stride_bytes;
+
+    /* --- 2. size of ONE worst-case send WQE --------------------------- */
+    size_t wqe_bytes =
+          sizeof(struct mlx5_wqe_ctrl_seg)   /* 16 B */
+        + sizeof(struct mlx5_wqe_raddr_seg);  /* 16 B */
+
+    if (max_inline) {
+        wqe_bytes += sizeof(struct mlx5_wqe_inline_seg)
+                   + align16(max_inline);
+    } else {
+        wqe_bytes += static_cast<size_t>(max_sge)
+                   * sizeof(struct mlx5_wqe_data_seg);
+    }
+
+    /* Pad each WQE to full 64-byte WQEBB (MLX5 macro)*/
+    wqe_bytes = align64(wqe_bytes); // MLX5_SEND_WQE_BB == 64
+
+    size_t sq_bytes = static_cast<size_t>(sq_wr) * wqe_bytes;
+    size_t sq_off  = align64(rq_bytes); // SQ must start at 64-B boundary
+    return { sq_off, sq_off + sq_bytes };
+}
+
+static inline uint32_t
+max_inline_from_wqesz(uint32_t max_wqe_sz_sq,
+                      uint32_t max_sge)
+{
+    const uint32_t base = 16 /*CTRL*/ + 16 /*RDMA*/;
+
+    if (max_sge == 0) {
+        /* pure inline path */
+        uint32_t room = max_wqe_sz_sq - (base + 16);   /* minus inline hdr */
+        return room & ~15U;                                /* 16-byte aligned  */
+    }
+
+    /* mixed path: keep room for max_sge data segments,
+       see if inline can ever be larger than that            */
+    uint32_t sge_bytes = max_sge * 16;
+    uint32_t inline_hdr = 16;
+
+    if (sge_bytes >= inline_hdr)  {
+        /* inline limited by SGE reservation */
+        uint32_t room = sge_bytes - inline_hdr;
+        return room & ~15U;
+    } else {
+        /* inline branch dominates (rare) */
+        uint32_t room = max_wqe_sz_sq - (base + inline_hdr);
+        return room & ~15U;
+    }
+}
+
 //==============================================================================
 // Memory Region
 //==============================================================================
+
+struct mr_creation_params {
+    uint32_t access;
+    uint32_t flags;
+    uint32_t pdn;
+    uint32_t length;
+    uint32_t mr_id;
+};
 
 class memory_region : public base_object {
     public:

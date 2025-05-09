@@ -10,7 +10,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_subdirectory(common)
 add_subdirectory(rdma_objects)
 add_subdirectory(rdma_connector)
-add_subdirectory(general_objects)
 
 # Create the main library
 add_library(rdma_helpers SHARED
@@ -23,9 +22,18 @@ target_include_directories(rdma_helpers PUBLIC
 )
 
 # Link dependencies
-target_link_libraries(rdma_helpers
+target_link_libraries(
+    rdma_helpers
     rdma_common
     rdma_objects
     rdma_connector
-    rdma_general_objects
 )
+
+# Debug level
+option(ENABLE_DEBUG "Enable debug logs" ON)
+
+if(ENABLE_DEBUG)
+    add_definitions(-DLOG_LEVEL=LOG_LEVEL_DEBUG)
+else()
+    add_definitions(-DLOG_LEVEL=LOG_LEVEL_ERROR)
+endif()

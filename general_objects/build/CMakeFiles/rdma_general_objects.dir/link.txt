@@ -1,2 +1,0 @@
-/usr/bin/ar qc librdma_general_objects.a CMakeFiles/rdma_general_objects.dir/rdma_device.cpp.o CMakeFiles/rdma_general_objects.dir/host.cpp.o
-/usr/bin/ranlib librdma_general_objects.a

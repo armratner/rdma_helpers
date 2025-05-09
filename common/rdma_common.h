@@ -35,15 +35,6 @@ inline bool FAILED(STATUS status) {
     return status != STATUS_OK;
 }
 
-#define RETURN_IF_FAILED(expr) \
-    do { \
-        STATUS _status = (expr); \
-        if (FAILED(_status)) { \
-            printf("Error: %s:%d in %s with status %d\n", __FILE__, __LINE__, __FUNCTION__, _status); \
-            return _status; \
-        } \
-    } while (0)
-
 // Mark unused static functions as unused to silence warnings
 static uint32_t ilog2(uint32_t x) __attribute__((unused));
 static uint32_t ilog2(uint32_t x) {
@@ -130,6 +121,26 @@ inline void log_info(const char* format, ...) {
         va_end(args);
     }
 }
+
+
+#define RETURN_IF_FAILED(expr) \
+    do { \
+        STATUS _status = (expr); \
+        if (FAILED(_status)) { \
+            log_error("Error: %s:%d in %s with status %d\n", __FILE__, __LINE__, __FUNCTION__, _status); \
+            return _status; \
+        } \
+    } while (0)
+
+#define RETURN_IF_FAILED_MSG(expr, msg) \
+    do { \
+        STATUS _status = (expr); \
+        if (FAILED(_status)) { \
+            log_error("Error: %s:%d in %s with status %d: %s\n", __FILE__, __LINE__, __FUNCTION__, _status, msg); \
+            return _status; \
+        } \
+    } while (0)
+
 
 #define tlx_typeof(_type) \
     __typeof__(_type)
@@ -229,6 +240,11 @@ static unsigned tlx_ffs64(uint64_t n)
 #define TLX_BIT_GET(_value, _i)  (!!((_value) & TLX_BIT(_i)))
 
 #define unlikely(x)      __builtin_expect(!!(x), 0)
+
+/* Align helpers --------------------------------------------------------- */
+static inline size_t align16(size_t n) { return (n + 15) & ~15U; }
+static inline size_t align64(size_t n) { return (n + 63) & ~63U; }
+static inline size_t align128(size_t n) { return (n + 127) & ~127U; }
 
 //==============================================================================
 // template memory allocation

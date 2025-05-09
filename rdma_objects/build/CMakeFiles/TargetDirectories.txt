@@ -1,0 +1,8 @@
+/mnt/armen/rdma_helpers/rdma_objects/build/CMakeFiles/rdma_objects.dir
+/mnt/armen/rdma_helpers/rdma_objects/build/CMakeFiles/rdma_objects_test.dir
+/mnt/armen/rdma_helpers/rdma_objects/build/CMakeFiles/edit_cache.dir
+/mnt/armen/rdma_helpers/rdma_objects/build/CMakeFiles/rebuild_cache.dir
+/mnt/armen/rdma_helpers/rdma_objects/build/CMakeFiles/list_install_components.dir
+/mnt/armen/rdma_helpers/rdma_objects/build/CMakeFiles/install.dir
+/mnt/armen/rdma_helpers/rdma_objects/build/CMakeFiles/install/local.dir
+/mnt/armen/rdma_helpers/rdma_objects/build/CMakeFiles/install/strip.dir
